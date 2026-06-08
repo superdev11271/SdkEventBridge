@@ -65,7 +65,7 @@ static void RegisterSportEventLogging(
         {
             if (cmdVelPublisher)
             {
-                cmdVelPublisher->HandleStop();
+                cmdVelPublisher->LockJoints();
             }
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
         }
@@ -107,11 +107,29 @@ static void RegisterSportEventLogging(
         }
     });
 
-    bridge.RegisterBalanceStandHandler([cmdCtlPublisher](const SportEventResult& result) {
+    bridge.RegisterBalanceStandHandler([cmdVelPublisher, cmdCtlPublisher](const SportEventResult& result) {
         HandleSportEvent("BALANCESTAND", result);
         if (result.IsSuccess())
         {
+            if (cmdVelPublisher)
+            {
+                cmdVelPublisher->UnlockJoints();
+            }
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
+        }
+    });
+
+    bridge.RegisterSwitchGaitHandler([cmdVelPublisher](const SportEventResult& result) {
+        HandleSportEvent("SWITCHGAIT", result);
+        if (!result.IsSuccess() || !cmdVelPublisher)
+        {
+            return;
+        }
+
+        int gait = 0;
+        if (CmdVelPublisher::ParseIntParameter(result.parameter, gait))
+        {
+            cmdVelPublisher->SetGait(gait);
         }
     });
 
@@ -123,10 +141,14 @@ static void RegisterSportEventLogging(
         }
     });
 
-    bridge.RegisterStandUpHandler([cmdCtlPublisher](const SportEventResult& result) {
+    bridge.RegisterStandUpHandler([cmdVelPublisher, cmdCtlPublisher](const SportEventResult& result) {
         HandleSportEvent("STANDUP", result);
         if (result.IsSuccess())
         {
+            if (cmdVelPublisher)
+            {
+                cmdVelPublisher->LockJoints();
+            }
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
         }
     });
@@ -137,16 +159,20 @@ static void RegisterSportEventLogging(
         {
             if (cmdVelPublisher)
             {
-                cmdVelPublisher->HandleStop();
+                cmdVelPublisher->LockJoints();
             }
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
         }
     });
 
-    bridge.RegisterRecoveryStandHandler([cmdCtlPublisher](const SportEventResult& result) {
+    bridge.RegisterRecoveryStandHandler([cmdVelPublisher, cmdCtlPublisher](const SportEventResult& result) {
         HandleSportEvent("RECOVERYSTAND", result);
         if (result.IsSuccess())
         {
+            if (cmdVelPublisher)
+            {
+                cmdVelPublisher->LockJoints();
+            }
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
         }
     });
@@ -218,6 +244,9 @@ int main(int argc, char** argv)
         std::cout << "MOVE -> /cmd_vel (geometry_msgs/Twist)" << std::endl;
         std::cout << "SWITCHMOVEMODE -> continuous MOVE on/off (auto stop after 1s when off)" << std::endl;
         std::cout << "SPEEDLEVEL -> max linear speed 1.5 m/s (slow, default) or 3.5 m/s (fast)" << std::endl;
+        std::cout << "STANDUP/STANDDOWN/RECOVERYSTAND -> lock joints (MOVE blocked)" << std::endl;
+        std::cout << "BALANCESTAND -> unlock joints (MOVE allowed)" << std::endl;
+        std::cout << "SWITCHGAIT 0 -> lock, 1-4 -> unlock" << std::endl;
         std::cout << "STANDUP/BALANCESTAND/RECOVERYSTAND -> /cmd_ctl 10001" << std::endl;
         std::cout << "STANDDOWN -> stop /cmd_vel, then /cmd_ctl 10002" << std::endl;
         std::cout << "DAMP -> stop /cmd_vel, then /cmd_ctl 10003" << std::endl;

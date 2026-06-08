@@ -41,6 +41,7 @@ enum class SportEventType : int32_t
     FreeWalk = unitree::robot::go2::ROBOT_SPORT_API_ID_FREEWALK,
     SwitchMoveMode = unitree::robot::b2::ROBOT_SPORT_API_ID_SWITCHMOVEMODE,
     SpeedLevel = unitree::robot::go2::ROBOT_SPORT_API_ID_SPEEDLEVEL,
+    SwitchGait = unitree::robot::b2::ROBOT_SPORT_API_ID_SWITCHGAIT,
 };
 
 struct SportEventResult
@@ -96,6 +97,7 @@ public:
     void RegisterFreeWalkHandler(SportEventHandler handler);
     void RegisterSwitchMoveModeHandler(SportEventHandler handler);
     void RegisterSpeedLevelHandler(SportEventHandler handler);
+    void RegisterSwitchGaitHandler(SportEventHandler handler);
 
     static bool IsSuccess(int32_t statusCode);
     static std::string SportApiIdToString(int32_t apiId);

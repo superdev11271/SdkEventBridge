@@ -11,6 +11,7 @@ namespace sdk_event_bridge
 CmdVelPublisher::CmdVelPublisher(const std::string& topicName)
     : mNode(std::make_shared<rclcpp::Node>("sdk_event_bridge_cmd_vel")),
       m_continuousMoveMode(false),
+      m_jointsLocked(true),
       m_hasActiveMove(false),
       m_maxLinearSpeed(LOW_MAX_LINEAR_SPEED)
 {
@@ -49,11 +50,49 @@ void CmdVelPublisher::SetSpeedLevel(int level)
         std::cout << "[speed_level] slow, max linear speed=" << m_maxLinearSpeed << " m/s" << std::endl;
     }
 
-    if (m_hasActiveMove)
+    if (!m_jointsLocked && m_hasActiveMove)
     {
         m_lastVelocity = ApplySpeedLimit(m_lastVelocity);
         PublishMove(m_lastVelocity);
     }
+}
+
+void CmdVelPublisher::LockJoints()
+{
+    m_jointsLocked = true;
+    m_hasActiveMove = false;
+    PublishStop();
+    std::cout << "[joint_lock] joints locked, MOVE blocked" << std::endl;
+}
+
+void CmdVelPublisher::UnlockJoints()
+{
+    m_jointsLocked = false;
+    std::cout << "[joint_lock] joints unlocked, MOVE allowed" << std::endl;
+}
+
+void CmdVelPublisher::SetGait(int gait)
+{
+    if (gait == 0)
+    {
+        LockJoints();
+        std::cout << "[gait] locked standing (gait=0)" << std::endl;
+        return;
+    }
+
+    if (gait >= 1 && gait <= 4)
+    {
+        UnlockJoints();
+        std::cout << "[gait] movable gait " << gait << " (unlocked)" << std::endl;
+        return;
+    }
+
+    std::cout << "[gait] unknown gait " << gait << ", no lock state change" << std::endl;
+}
+
+bool CmdVelPublisher::IsJointsLocked() const
+{
+    return m_jointsLocked;
 }
 
 double CmdVelPublisher::GetMaxLinearSpeed() const
@@ -211,6 +250,12 @@ void CmdVelPublisher::PublishStop()
 
 void CmdVelPublisher::HandleMove(const std::string& parameterJson)
 {
+    if (m_jointsLocked)
+    {
+        std::cout << "[joint_lock] MOVE ignored, joints are locked" << std::endl;
+        return;
+    }
+
     m_lastVelocity = ApplySpeedLimit(ParseMoveParameter(parameterJson));
     m_lastMoveTime = std::chrono::steady_clock::now();
     m_hasActiveMove = true;
@@ -230,7 +275,7 @@ void CmdVelPublisher::PublishMoveFromParameter(const std::string& parameterJson)
 
 void CmdVelPublisher::Tick()
 {
-    if (m_continuousMoveMode || !m_hasActiveMove)
+    if (m_jointsLocked || m_continuousMoveMode || !m_hasActiveMove)
     {
         return;
     }

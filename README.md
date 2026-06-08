@@ -24,6 +24,7 @@ SdkEventBridge listens for those commands, handles them locally, and bridges eve
   - FREEWALK
   - SWITCHMOVEMODE
   - SPEEDLEVEL
+  - SWITCHGAIT
 - Publish ROS2 `geometry_msgs/msg/Twist` to `/cmd_vel` on MOVE and STOPMOVE
 - Publish ROS2 `std_msgs/msg/Int32` to `/cmd_ctl` for FSM / simulation commands
 - Passive mode for observation-only use
@@ -152,6 +153,22 @@ Parameter JSON: `{"data": -1}` or `{"data": 1}`.
 
 Linear velocity `(vx, vy)` is scaled down if its magnitude exceeds the current max. Angular `vyaw` is not clamped.
 
+## Joint lock / unlock (MOVE gating)
+
+MOVE commands are only published to `/cmd_vel` when joints are **unlocked**. Default state is **locked**.
+
+| Event | Lock state | Effect |
+|-------|------------|--------|
+| STANDUP | Lock | Joints locked, MOVE ignored |
+| STANDDOWN | Lock | Stop + lock, MOVE ignored |
+| RECOVERYSTAND | Lock | Joints locked |
+| DAMP | Lock | Stop + lock |
+| BALANCESTAND | **Unlock** | MOVE allowed |
+| SWITCHGAIT `0` | Lock | Locked standing |
+| SWITCHGAIT `1-4` | **Unlock** | Movable gaits (walk modes) |
+
+Typical flow: `STANDUP` (locked) → `BALANCESTAND` (unlocked) → `MOVE` works.
+
 ## ROS2 `/cmd_ctl` mapping (FSM / simulation)
 
 Publishes `std_msgs/msg/Int32` with a 5-digit command code in `data`:
@@ -218,6 +235,7 @@ Register handlers:
 - `RegisterFreeWalkHandler()`
 - `RegisterSwitchMoveModeHandler()`
 - `RegisterSpeedLevelHandler()`
+- `RegisterSwitchGaitHandler()`
 
 Or use generic handlers:
 

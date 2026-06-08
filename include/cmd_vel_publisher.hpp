@@ -37,6 +37,11 @@ public:
     void SetSpeedLevel(int level);
     double GetMaxLinearSpeed() const;
 
+    void LockJoints();
+    void UnlockJoints();
+    void SetGait(int gait);
+    bool IsJointsLocked() const;
+
     void HandleMove(const std::string& parameterJson);
     void HandleStop();
     void PublishMove(const MoveVelocity& velocity);
@@ -56,6 +61,7 @@ private:
     rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr mPublisher;
 
     bool m_continuousMoveMode;
+    bool m_jointsLocked;
     bool m_hasActiveMove;
     double m_maxLinearSpeed;
     MoveVelocity m_lastVelocity;
