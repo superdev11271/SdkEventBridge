@@ -19,6 +19,15 @@ struct MoveVelocity
     double vyaw = 0.0;
 };
 
+enum class WalkMode
+{
+    None,
+    VisionWalk,
+    FreeWalk,
+    ClassicWalk,
+    FastWalk,
+};
+
 class CmdVelPublisher
 {
 public:
@@ -42,6 +51,12 @@ public:
     void SetGait(int gait);
     bool IsJointsLocked() const;
 
+    void SetVisionWalk(bool enabled);
+    void SetFreeWalk();
+    void SetClassicWalk(bool enabled);
+    void SetFastWalk(bool enabled);
+    WalkMode GetWalkMode() const;
+
     void HandleMove(const std::string& parameterJson);
     void HandleStop();
     void PublishMove(const MoveVelocity& velocity);
@@ -54,6 +69,9 @@ public:
     static bool ParseIntParameter(const std::string& parameterJson, int& value);
 
 private:
+    void SetWalkMode(WalkMode mode, bool enabled);
+    static const char* WalkModeToString(WalkMode mode);
+
     MoveVelocity ApplySpeedLimit(const MoveVelocity& velocity) const;
     void PublishStop();
 
@@ -62,6 +80,7 @@ private:
 
     bool m_continuousMoveMode;
     bool m_jointsLocked;
+    WalkMode m_walkMode;
     bool m_hasActiveMove;
     double m_maxLinearSpeed;
     MoveVelocity m_lastVelocity;

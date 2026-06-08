@@ -199,6 +199,23 @@ void SdkEventBridgeClass::RegisterFreeWalkHandler(SportEventHandler handler)
     RegisterSportEventHandler(unitree::robot::b2::ROBOT_SPORT_API_ID_FREEWALK, sharedHandler);
 }
 
+void SdkEventBridgeClass::RegisterVisionWalkHandler(SportEventHandler handler)
+{
+    RegisterSportEventHandler(unitree::robot::b2::ROBOT_SPORT_API_ID_VISIONWALK, std::move(handler));
+}
+
+void SdkEventBridgeClass::RegisterClassicWalkHandler(SportEventHandler handler)
+{
+    const SportEventHandler sharedHandler = handler;
+    RegisterSportEventHandler(unitree::robot::go2::ROBOT_SPORT_API_ID_CLASSICWALK, sharedHandler);
+    RegisterSportEventHandler(unitree::robot::b2::ROBOT_SPORT_API_ID_CLASSICWALK, sharedHandler);
+}
+
+void SdkEventBridgeClass::RegisterFastWalkHandler(SportEventHandler handler)
+{
+    RegisterSportEventHandler(unitree::robot::b2::ROBOT_SPORT_API_ID_FASTWALK, std::move(handler));
+}
+
 void SdkEventBridgeClass::RegisterSwitchMoveModeHandler(SportEventHandler handler)
 {
     RegisterSportEventHandler(unitree::robot::b2::ROBOT_SPORT_API_ID_SWITCHMOVEMODE, std::move(handler));
@@ -232,6 +249,10 @@ bool SdkEventBridgeClass::IsTrackedSportApi(int32_t apiId)
     case unitree::robot::go2::ROBOT_SPORT_API_ID_RECOVERYSTAND:
     case unitree::robot::go2::ROBOT_SPORT_API_ID_FREEWALK:
     case unitree::robot::b2::ROBOT_SPORT_API_ID_FREEWALK:
+    case unitree::robot::go2::ROBOT_SPORT_API_ID_CLASSICWALK:
+    case unitree::robot::b2::ROBOT_SPORT_API_ID_CLASSICWALK:
+    case unitree::robot::b2::ROBOT_SPORT_API_ID_VISIONWALK:
+    case unitree::robot::b2::ROBOT_SPORT_API_ID_FASTWALK:
     case unitree::robot::b2::ROBOT_SPORT_API_ID_SWITCHMOVEMODE:
     case unitree::robot::go2::ROBOT_SPORT_API_ID_SPEEDLEVEL:
     case unitree::robot::b2::ROBOT_SPORT_API_ID_SWITCHGAIT:
@@ -422,6 +443,13 @@ std::string SdkEventBridgeClass::SportApiIdToString(int32_t apiId)
     case unitree::robot::go2::ROBOT_SPORT_API_ID_FREEWALK:
     case unitree::robot::b2::ROBOT_SPORT_API_ID_FREEWALK:
         return "FREEWALK";
+    case unitree::robot::go2::ROBOT_SPORT_API_ID_CLASSICWALK:
+    case unitree::robot::b2::ROBOT_SPORT_API_ID_CLASSICWALK:
+        return "CLASSICWALK";
+    case unitree::robot::b2::ROBOT_SPORT_API_ID_VISIONWALK:
+        return "VISIONWALK";
+    case unitree::robot::b2::ROBOT_SPORT_API_ID_FASTWALK:
+        return "FASTWALK";
     case unitree::robot::b2::ROBOT_SPORT_API_ID_SWITCHMOVEMODE:
         return "SWITCHMOVEMODE";
     case unitree::robot::go2::ROBOT_SPORT_API_ID_SPEEDLEVEL:

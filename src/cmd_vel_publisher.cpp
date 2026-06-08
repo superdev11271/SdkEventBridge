@@ -12,6 +12,7 @@ CmdVelPublisher::CmdVelPublisher(const std::string& topicName)
     : mNode(std::make_shared<rclcpp::Node>("sdk_event_bridge_cmd_vel")),
       m_continuousMoveMode(false),
       m_jointsLocked(true),
+      m_walkMode(WalkMode::None),
       m_hasActiveMove(false),
       m_maxLinearSpeed(LOW_MAX_LINEAR_SPEED)
 {
@@ -93,6 +94,69 @@ void CmdVelPublisher::SetGait(int gait)
 bool CmdVelPublisher::IsJointsLocked() const
 {
     return m_jointsLocked;
+}
+
+const char* CmdVelPublisher::WalkModeToString(WalkMode mode)
+{
+    switch (mode)
+    {
+    case WalkMode::VisionWalk:
+        return "vision walk";
+    case WalkMode::FreeWalk:
+        return "free walk";
+    case WalkMode::ClassicWalk:
+        return "classic walk";
+    case WalkMode::FastWalk:
+        return "fast walk";
+    case WalkMode::None:
+    default:
+        return "none";
+    }
+}
+
+void CmdVelPublisher::SetWalkMode(WalkMode mode, bool enabled)
+{
+    if (enabled)
+    {
+        m_walkMode = mode;
+        UnlockJoints();
+        std::cout << "[walk_mode] " << WalkModeToString(mode) << " enabled" << std::endl;
+        return;
+    }
+
+    if (m_walkMode == mode)
+    {
+        m_walkMode = WalkMode::None;
+        LockJoints();
+        std::cout << "[walk_mode] " << WalkModeToString(mode) << " disabled" << std::endl;
+    }
+}
+
+void CmdVelPublisher::SetVisionWalk(bool enabled)
+{
+    SetWalkMode(WalkMode::VisionWalk, enabled);
+}
+
+void CmdVelPublisher::SetFreeWalk()
+{
+    m_walkMode = WalkMode::FreeWalk;
+    UnlockJoints();
+    std::cout << "[walk_mode] free walk enabled" << std::endl;
+}
+
+void CmdVelPublisher::SetClassicWalk(bool enabled)
+{
+    SetWalkMode(WalkMode::ClassicWalk, enabled);
+}
+
+void CmdVelPublisher::SetFastWalk(bool enabled)
+{
+    SetWalkMode(WalkMode::FastWalk, enabled);
+}
+
+WalkMode CmdVelPublisher::GetWalkMode() const
+{
+    return m_walkMode;
 }
 
 double CmdVelPublisher::GetMaxLinearSpeed() const

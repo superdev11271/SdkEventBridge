@@ -177,8 +177,54 @@ static void RegisterSportEventLogging(
         }
     });
 
-    bridge.RegisterFreeWalkHandler([](const SportEventResult& result) {
+    bridge.RegisterFreeWalkHandler([cmdVelPublisher](const SportEventResult& result) {
         HandleSportEvent("FREEWALK", result);
+        if (result.IsSuccess() && cmdVelPublisher)
+        {
+            cmdVelPublisher->SetFreeWalk();
+        }
+    });
+
+    bridge.RegisterVisionWalkHandler([cmdVelPublisher](const SportEventResult& result) {
+        HandleSportEvent("VISIONWALK", result);
+        if (!result.IsSuccess() || !cmdVelPublisher)
+        {
+            return;
+        }
+
+        bool enabled = false;
+        if (CmdVelPublisher::ParseBoolParameter(result.parameter, enabled))
+        {
+            cmdVelPublisher->SetVisionWalk(enabled);
+        }
+    });
+
+    bridge.RegisterClassicWalkHandler([cmdVelPublisher](const SportEventResult& result) {
+        HandleSportEvent("CLASSICWALK", result);
+        if (!result.IsSuccess() || !cmdVelPublisher)
+        {
+            return;
+        }
+
+        bool enabled = false;
+        if (CmdVelPublisher::ParseBoolParameter(result.parameter, enabled))
+        {
+            cmdVelPublisher->SetClassicWalk(enabled);
+        }
+    });
+
+    bridge.RegisterFastWalkHandler([cmdVelPublisher](const SportEventResult& result) {
+        HandleSportEvent("FASTWALK", result);
+        if (!result.IsSuccess() || !cmdVelPublisher)
+        {
+            return;
+        }
+
+        bool enabled = false;
+        if (CmdVelPublisher::ParseBoolParameter(result.parameter, enabled))
+        {
+            cmdVelPublisher->SetFastWalk(enabled);
+        }
     });
 }
 
@@ -247,6 +293,8 @@ int main(int argc, char** argv)
         std::cout << "STANDUP/STANDDOWN/RECOVERYSTAND -> lock joints (MOVE blocked)" << std::endl;
         std::cout << "BALANCESTAND -> unlock joints (MOVE allowed)" << std::endl;
         std::cout << "SWITCHGAIT 0 -> lock, 1-4 -> unlock" << std::endl;
+        std::cout << "VISIONWALK/CLASSICWALK/FASTWALK true -> unlock, false -> lock" << std::endl;
+        std::cout << "FREEWALK -> unlock joints (free gait)" << std::endl;
         std::cout << "STANDUP/BALANCESTAND/RECOVERYSTAND -> /cmd_ctl 10001" << std::endl;
         std::cout << "STANDDOWN -> stop /cmd_vel, then /cmd_ctl 10002" << std::endl;
         std::cout << "DAMP -> stop /cmd_vel, then /cmd_ctl 10003" << std::endl;

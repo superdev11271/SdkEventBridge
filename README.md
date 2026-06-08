@@ -22,6 +22,9 @@ SdkEventBridge listens for those commands, handles them locally, and bridges eve
   - STANDDOWN
   - RECOVERYSTAND
   - FREEWALK
+  - VISIONWALK
+  - CLASSICWALK
+  - FASTWALK
   - SWITCHMOVEMODE
   - SPEEDLEVEL
   - SWITCHGAIT
@@ -164,10 +167,28 @@ MOVE commands are only published to `/cmd_vel` when joints are **unlocked**. Def
 | RECOVERYSTAND | Lock | Joints locked |
 | DAMP | Lock | Stop + lock |
 | BALANCESTAND | **Unlock** | MOVE allowed |
+| FREEWALK | **Unlock** | Free gait |
+| VISIONWALK / CLASSICWALK / FASTWALK `true` | **Unlock** | Gait enabled |
+| VISIONWALK / CLASSICWALK / FASTWALK `false` | Lock | Gait disabled |
 | SWITCHGAIT `0` | Lock | Locked standing |
 | SWITCHGAIT `1-4` | **Unlock** | Movable gaits (walk modes) |
 
 Typical flow: `STANDUP` (locked) → `BALANCESTAND` (unlocked) → `MOVE` works.
+
+## Walk modes (VisionWalk / FreeWalk / ClassicWalk / FastWalk)
+
+These sport APIs enable or disable locomotion gaits. When enabled, joints are **unlocked** so MOVE is allowed. When disabled (`flag=false`), joints are **locked** and MOVE is blocked.
+
+| API | Parameter | Effect |
+|-----|-----------|--------|
+| `VisionWalk(bool flag)` | `{"data": true/false}` | Visual walk on/off |
+| `FreeWalk()` | none | Free gait on (unlocks joints) |
+| `ClassicWalk(bool flag)` | `{"data": true/false}` | Classic gait on/off |
+| `FastWalk(bool flag)` | `{"data": true/false}` | Running gait on/off |
+
+B2 sport client menu IDs (for reference): `11`=free walk, `12`=classic walk, `13`=fast walk.
+
+`SpeedLevel` still applies to MOVE velocity clamping in any walk mode.
 
 ## ROS2 `/cmd_ctl` mapping (FSM / simulation)
 

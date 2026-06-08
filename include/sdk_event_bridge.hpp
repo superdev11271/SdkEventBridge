@@ -39,6 +39,9 @@ enum class SportEventType : int32_t
     StandDown = unitree::robot::go2::ROBOT_SPORT_API_ID_STANDDOWN,
     RecoveryStand = unitree::robot::go2::ROBOT_SPORT_API_ID_RECOVERYSTAND,
     FreeWalk = unitree::robot::go2::ROBOT_SPORT_API_ID_FREEWALK,
+    ClassicWalk = unitree::robot::go2::ROBOT_SPORT_API_ID_CLASSICWALK,
+    VisionWalk = unitree::robot::b2::ROBOT_SPORT_API_ID_VISIONWALK,
+    FastWalk = unitree::robot::b2::ROBOT_SPORT_API_ID_FASTWALK,
     SwitchMoveMode = unitree::robot::b2::ROBOT_SPORT_API_ID_SWITCHMOVEMODE,
     SpeedLevel = unitree::robot::go2::ROBOT_SPORT_API_ID_SPEEDLEVEL,
     SwitchGait = unitree::robot::b2::ROBOT_SPORT_API_ID_SWITCHGAIT,
@@ -95,6 +98,9 @@ public:
     void RegisterStandDownHandler(SportEventHandler handler);
     void RegisterRecoveryStandHandler(SportEventHandler handler);
     void RegisterFreeWalkHandler(SportEventHandler handler);
+    void RegisterVisionWalkHandler(SportEventHandler handler);
+    void RegisterClassicWalkHandler(SportEventHandler handler);
+    void RegisterFastWalkHandler(SportEventHandler handler);
     void RegisterSwitchMoveModeHandler(SportEventHandler handler);
     void RegisterSpeedLevelHandler(SportEventHandler handler);
     void RegisterSwitchGaitHandler(SportEventHandler handler);
