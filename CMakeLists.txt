@@ -12,6 +12,7 @@ find_package(std_msgs REQUIRED)
 
 add_library(sdk_event_bridge STATIC
     src/sdk_event_bridge.cpp
+    src/motion_switcher_bridge.cpp
     src/cmd_vel_publisher.cpp
     src/cmd_ctl_publisher.cpp
 )

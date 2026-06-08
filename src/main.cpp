@@ -1,3 +1,4 @@
+#include <cmath>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -7,6 +8,7 @@
 
 #include "cmd_ctl_publisher.hpp"
 #include "cmd_vel_publisher.hpp"
+#include "motion_switcher_bridge.hpp"
 #include "sdk_event_bridge.hpp"
 
 using namespace sdk_event_bridge;
@@ -25,6 +27,63 @@ static void PublishFsmCommandIfMapped(
     {
         cmdCtlPublisher->PublishCommand(command);
     }
+}
+
+static void HandleMotionSwitcherEvent(
+    const std::string& eventName,
+    const MotionSwitcherEventResult& result)
+{
+    if (result.IsSuccess())
+    {
+        std::cout << "[" << eventName << "] intercepted success (0)"
+                  << " latency=" << result.responseLatencyMs << "ms"
+                  << " requestId=" << result.requestId;
+        if (!result.parameter.empty())
+        {
+            std::cout << " parameter=" << result.parameter;
+        }
+        if (!result.data.empty())
+        {
+            std::cout << " data=" << result.data;
+        }
+        std::cout << std::endl;
+        return;
+    }
+
+    std::cout << "[" << eventName << "] intercepted failed (" << result.statusCode << ")"
+              << " latency=" << result.responseLatencyMs << "ms"
+              << " error=" << SdkEventBridgeClass::StatusCodeToString(result.statusCode)
+              << " requestId=" << result.requestId << std::endl;
+}
+
+static void RegisterMotionSwitcherEventLogging(MotionSwitcherBridgeClass& bridge)
+{
+    bridge.SetRequestHandler([](int32_t apiId, const unitree::robot::Request& request) {
+        std::cout << "[motion_switcher/request] api="
+                  << MotionSwitcherBridgeClass::ApiIdToString(apiId)
+                  << " id=" << request.header().identity().id()
+                  << " parameter=" << request.parameter() << std::endl;
+    });
+
+    bridge.RegisterCheckModeHandler([](const MotionSwitcherEventResult& result) {
+        HandleMotionSwitcherEvent("CHECK_MODE", result);
+    });
+
+    bridge.RegisterSelectModeHandler([](const MotionSwitcherEventResult& result) {
+        HandleMotionSwitcherEvent("SELECT_MODE", result);
+    });
+
+    bridge.RegisterReleaseModeHandler([](const MotionSwitcherEventResult& result) {
+        HandleMotionSwitcherEvent("RELEASE_MODE", result);
+    });
+
+    bridge.RegisterSetSilentHandler([](const MotionSwitcherEventResult& result) {
+        HandleMotionSwitcherEvent("SET_SILENT", result);
+    });
+
+    bridge.RegisterGetSilentHandler([](const MotionSwitcherEventResult& result) {
+        HandleMotionSwitcherEvent("GET_SILENT", result);
+    });
 }
 
 static void HandleSportEvent(const std::string& eventName, const SportEventResult& result)
@@ -48,8 +107,28 @@ static void HandleSportEvent(const std::string& eventName, const SportEventResul
               << " requestId=" << result.requestId << std::endl;
 }
 
+static void UpdatePostureFromMove(
+    MotionSwitcherBridgeClass& motionSwitcherBridge,
+    const std::shared_ptr<CmdVelPublisher>& cmdVelPublisher,
+    const std::string& parameterJson)
+{
+    if (!cmdVelPublisher || cmdVelPublisher->IsJointsLocked())
+    {
+        return;
+    }
+
+    const MoveVelocity velocity = CmdVelPublisher::ParseMoveParameter(parameterJson);
+    const bool hasMotion =
+        std::abs(velocity.vx) > 0.0 || std::abs(velocity.vy) > 0.0 || std::abs(velocity.vyaw) > 0.0;
+    if (hasMotion)
+    {
+        motionSwitcherBridge.SetRobotPosture(RobotPosture::Walking);
+    }
+}
+
 static void RegisterSportEventLogging(
     SdkEventBridgeClass& bridge,
+    MotionSwitcherBridgeClass& motionSwitcherBridge,
     const std::shared_ptr<CmdVelPublisher>& cmdVelPublisher,
     const std::shared_ptr<CmdCtlPublisher>& cmdCtlPublisher)
 {
@@ -59,7 +138,8 @@ static void RegisterSportEventLogging(
                   << " parameter=" << request.parameter() << std::endl;
     });
 
-    bridge.RegisterDampHandler([cmdVelPublisher, cmdCtlPublisher](const SportEventResult& result) {
+    bridge.RegisterDampHandler([cmdVelPublisher, cmdCtlPublisher, &motionSwitcherBridge](
+        const SportEventResult& result) {
         HandleSportEvent("DAMP", result);
         if (result.IsSuccess())
         {
@@ -67,15 +147,17 @@ static void RegisterSportEventLogging(
             {
                 cmdVelPublisher->LockJoints();
             }
+            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandDown);
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
         }
     });
 
-    bridge.RegisterMoveHandler([cmdVelPublisher](const SportEventResult& result) {
+    bridge.RegisterMoveHandler([&motionSwitcherBridge, cmdVelPublisher](const SportEventResult& result) {
         HandleSportEvent("MOVE", result);
         if (result.IsSuccess() && cmdVelPublisher)
         {
             cmdVelPublisher->HandleMove(result.parameter);
+            UpdatePostureFromMove(motionSwitcherBridge, cmdVelPublisher, result.parameter);
         }
     });
 
@@ -107,7 +189,8 @@ static void RegisterSportEventLogging(
         }
     });
 
-    bridge.RegisterBalanceStandHandler([cmdVelPublisher, cmdCtlPublisher](const SportEventResult& result) {
+    bridge.RegisterBalanceStandHandler([&motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher](
+        const SportEventResult& result) {
         HandleSportEvent("BALANCESTAND", result);
         if (result.IsSuccess())
         {
@@ -115,6 +198,7 @@ static void RegisterSportEventLogging(
             {
                 cmdVelPublisher->UnlockJoints();
             }
+            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandUp);
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
         }
     });
@@ -133,15 +217,20 @@ static void RegisterSportEventLogging(
         }
     });
 
-    bridge.RegisterStopMoveHandler([cmdVelPublisher](const SportEventResult& result) {
+    bridge.RegisterStopMoveHandler([&motionSwitcherBridge, cmdVelPublisher](const SportEventResult& result) {
         HandleSportEvent("STOPMOVE", result);
-        if (result.IsSuccess() && cmdVelPublisher)
+        if (result.IsSuccess())
         {
-            cmdVelPublisher->HandleStop();
+            if (cmdVelPublisher)
+            {
+                cmdVelPublisher->HandleStop();
+            }
+            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandUp);
         }
     });
 
-    bridge.RegisterStandUpHandler([cmdVelPublisher, cmdCtlPublisher](const SportEventResult& result) {
+    bridge.RegisterStandUpHandler([&motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher](
+        const SportEventResult& result) {
         HandleSportEvent("STANDUP", result);
         if (result.IsSuccess())
         {
@@ -149,11 +238,13 @@ static void RegisterSportEventLogging(
             {
                 cmdVelPublisher->LockJoints();
             }
+            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandUp);
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
         }
     });
 
-    bridge.RegisterStandDownHandler([cmdVelPublisher, cmdCtlPublisher](const SportEventResult& result) {
+    bridge.RegisterStandDownHandler([&motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher](
+        const SportEventResult& result) {
         HandleSportEvent("STANDDOWN", result);
         if (result.IsSuccess())
         {
@@ -161,11 +252,13 @@ static void RegisterSportEventLogging(
             {
                 cmdVelPublisher->LockJoints();
             }
+            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandDown);
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
         }
     });
 
-    bridge.RegisterRecoveryStandHandler([cmdVelPublisher, cmdCtlPublisher](const SportEventResult& result) {
+    bridge.RegisterRecoveryStandHandler([&motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher](
+        const SportEventResult& result) {
         HandleSportEvent("RECOVERYSTAND", result);
         if (result.IsSuccess())
         {
@@ -173,6 +266,7 @@ static void RegisterSportEventLogging(
             {
                 cmdVelPublisher->LockJoints();
             }
+            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandUp);
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
         }
     });
@@ -268,17 +362,26 @@ int main(int argc, char** argv)
     auto cmdVelPublisher = std::make_shared<CmdVelPublisher>("/cmd_vel");
     auto cmdCtlPublisher = std::make_shared<CmdCtlPublisher>("/cmd_ctl");
 
-    SdkEventBridgeClass bridge(domainId, networkInterface);
-    bridge.SetMode(mode);
-    bridge.Init();
-    RegisterSportEventLogging(bridge, cmdVelPublisher, cmdCtlPublisher);
-    bridge.Start();
+    SdkEventBridgeClass sportBridge(domainId, networkInterface);
+    MotionSwitcherBridgeClass motionSwitcherBridge(domainId, networkInterface);
+
+    sportBridge.SetMode(mode);
+    motionSwitcherBridge.SetMode(mode);
+
+    sportBridge.Init();
+    RegisterSportEventLogging(sportBridge, motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher);
+    RegisterMotionSwitcherEventLogging(motionSwitcherBridge);
+
+    sportBridge.Start();
+    motionSwitcherBridge.Start();
 
     std::cout << "SdkEventBridge mode="
               << (mode == BridgeMode::Intercept ? "intercept" : "passive")
-              << " service=" << SPORT_SERVICE_NAME
-              << " request=" << SPORT_REQUEST_TOPIC
-              << " response=" << SPORT_RESPONSE_TOPIC
+              << " sport_service=" << SPORT_SERVICE_NAME
+              << " sport_request=" << SPORT_REQUEST_TOPIC
+              << " sport_response=" << SPORT_RESPONSE_TOPIC
+              << " motion_switcher_request=" << MOTION_SWITCHER_REQUEST_TOPIC
+              << " motion_switcher_response=" << MOTION_SWITCHER_RESPONSE_TOPIC
               << " ros2_cmd_vel=/cmd_vel"
               << " ros2_cmd_ctl=/cmd_ctl"
               << " domain=" << domainId
@@ -298,18 +401,30 @@ int main(int argc, char** argv)
         std::cout << "STANDUP/BALANCESTAND/RECOVERYSTAND -> /cmd_ctl 10001" << std::endl;
         std::cout << "STANDDOWN -> stop /cmd_vel, then /cmd_ctl 10002" << std::endl;
         std::cout << "DAMP -> stop /cmd_vel, then /cmd_ctl 10003" << std::endl;
+        std::cout << "Motion switcher: SELECT_MODE/RELEASE_MODE only allowed in stand down posture"
+                  << " (error 7002 when stand up or walking)." << std::endl;
         std::cout << "Keep the real robot off this DDS network to prevent it from executing commands." << std::endl;
     }
 
     while (rclcpp::ok())
     {
         cmdVelPublisher->Tick();
+        if (cmdVelPublisher->IsActivelyMoving())
+        {
+            motionSwitcherBridge.SetRobotPosture(RobotPosture::Walking);
+        }
+        else if (motionSwitcherBridge.GetRobotPosture() == RobotPosture::Walking)
+        {
+            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandUp);
+        }
+
         cmdVelPublisher->SpinOnce();
         cmdCtlPublisher->SpinOnce();
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
-    bridge.Stop();
+    sportBridge.Stop();
+    motionSwitcherBridge.Stop();
     rclcpp::shutdown();
     return 0;
 }

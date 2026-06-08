@@ -96,6 +96,11 @@ bool CmdVelPublisher::IsJointsLocked() const
     return m_jointsLocked;
 }
 
+bool CmdVelPublisher::IsActivelyMoving() const
+{
+    return m_hasActiveMove && !m_jointsLocked;
+}
+
 const char* CmdVelPublisher::WalkModeToString(WalkMode mode)
 {
     switch (mode)

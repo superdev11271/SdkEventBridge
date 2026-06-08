@@ -1,17 +1,22 @@
 # SdkEventBridge
 
-Intercept Unitree SDK2 sport commands over DDS, handle them in your own program, and republish them to ROS2 simulation topics (`/cmd_vel`, `/cmd_ctl`).
+Intercept Unitree SDK2 sport and motion switcher commands over DDS, handle them in your own program, and republish sport events to ROS2 simulation topics (`/cmd_vel`, `/cmd_ctl`).
 
 When a sport client (for example `b2_sport_client` or `go2_sport_client`) sends a command, Unitree SDK2 publishes on these internal DDS topics:
 
 - `rt/api/sport/request`
 - `rt/api/sport/response`
 
-SdkEventBridge listens for those commands, handles them locally, and bridges events to ROS2 simulation topics.
+Motion switcher clients use:
+
+- `rt/api/motion_switcher/request`
+- `rt/api/motion_switcher/response`
+
+SdkEventBridge listens for those commands, handles them locally, and bridges sport events to ROS2 simulation topics.
 
 ## Features
 
-- Intercept sport API requests before they reach the real robot service
+- Intercept sport and motion switcher API requests before they reach the real robot service
 - Reply immediately to the SDK client with status code `0` (success)
 - Handle sport events by API ID:
   - DAMP
@@ -28,6 +33,12 @@ SdkEventBridge listens for those commands, handles them locally, and bridges eve
   - SWITCHMOVEMODE
   - SPEEDLEVEL
   - SWITCHGAIT
+- Handle motion switcher APIs:
+  - CHECK_MODE
+  - SELECT_MODE
+  - RELEASE_MODE
+  - SET_SILENT
+  - GET_SILENT
 - Publish ROS2 `geometry_msgs/msg/Twist` to `/cmd_vel` on MOVE and STOPMOVE
 - Publish ROS2 `std_msgs/msg/Int32` to `/cmd_ctl` for FSM / simulation commands
 - Passive mode for observation-only use
@@ -102,8 +113,42 @@ Test examples:
 
 | Mode | Description |
 |------|-------------|
-| `intercept` (default) | Acts as the sport server. Commands are handled locally and answered immediately. |
-| `passive` | Subscribes to DDS topics and logs traffic without replying as the sport server. |
+| `intercept` (default) | Acts as the sport and motion switcher server. Commands are handled locally and answered immediately. |
+| `passive` | Subscribes to DDS topics and logs traffic without replying as the server. |
+
+## Motion switcher bridge
+
+In intercept mode, `MotionSwitcherBridgeClass` emulates the B2 motion switcher service locally.
+
+| API | ID | Parameter | Response data |
+|-----|----|-----------|---------------|
+| `CheckMode` | 1001 | none | `{"form":"0","name":""}` (default: standard form, no active mode) |
+| `SelectMode` | 1002 | `{"name":"ai"}` | empty (stores selected mode) |
+| `ReleaseMode` | 1003 | none | empty (clears active mode) |
+| `SetSilent` | 1004 | `{"silent":true/false}` | empty |
+| `GetSilent` | 1005 | none | `{"silent":false}` |
+
+Default simulated state:
+
+- `form`: `"0"` (standard form; `"1"` is wheel mode)
+- `name`: `""` (released; e.g. `"ai"` when a mode is selected)
+- `silent`: `false`
+
+### Mode change gating (posture)
+
+`SelectMode` and `ReleaseMode` are only accepted when the robot is in **stand down** posture. If the robot is standing or walking, the request is rejected with error `7002` (`UT_SWITCH_ERR_BUSY`) and the stored mode is not changed.
+
+Posture is derived from sport events:
+
+| Posture | Sport events |
+|---------|--------------|
+| Stand down | `STANDDOWN`, `DAMP` |
+| Stand up | `STANDUP`, `BALANCESTAND`, `RECOVERYSTAND`, `STOPMOVE` |
+| Walking | `MOVE` with non-zero velocity (or active `/cmd_vel` until auto-stop) |
+
+`CheckMode`, `SetSilent`, and `GetSilent` are always allowed.
+
+Low-level examples that call `MotionSwitcherClient` (for example `b2_stand_example`) can use the bridge to release motion control without the real robot.
 
 ## ROS2 `/cmd_vel` mapping
 

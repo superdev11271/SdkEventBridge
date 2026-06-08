@@ -50,6 +50,7 @@ public:
     void UnlockJoints();
     void SetGait(int gait);
     bool IsJointsLocked() const;
+    bool IsActivelyMoving() const;
 
     void SetVisionWalk(bool enabled);
     void SetFreeWalk();
