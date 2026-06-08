@@ -22,6 +22,7 @@ inline constexpr const char* SPORT_RESPONSE_TOPIC = "rt/api/sport/response";
 inline constexpr const char* SPORT_SERVICE_NAME = "sport";
 
 inline constexpr int32_t SPORT_STATUS_SUCCESS = 0;
+inline constexpr std::chrono::milliseconds POSTURE_ACTION_RESPONSE_DELAY{2000};
 
 enum class BridgeMode
 {
@@ -131,6 +132,7 @@ private:
     void DispatchEventResult(const SportEventResult& result);
 
     static bool IsTrackedSportApi(int32_t apiId);
+    static bool RequiresPostureActionDelay(int32_t apiId);
     static std::string BuildInterceptResponseData(
         int32_t apiId,
         const unitree::robot::Request& request,

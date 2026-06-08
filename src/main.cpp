@@ -138,6 +138,42 @@ static void RegisterSportEventLogging(
                   << " parameter=" << request.parameter() << std::endl;
     });
 
+    bridge.RegisterSportRequestHandler(
+        unitree::robot::go2::ROBOT_SPORT_API_ID_STANDUP,
+        [&motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher](
+            int32_t apiId, const unitree::robot::Request&) {
+            if (cmdVelPublisher)
+            {
+                cmdVelPublisher->LockJoints();
+            }
+            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandUp);
+            PublishFsmCommandIfMapped(cmdCtlPublisher, apiId);
+        });
+
+    bridge.RegisterSportRequestHandler(
+        unitree::robot::go2::ROBOT_SPORT_API_ID_STANDDOWN,
+        [&motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher](
+            int32_t apiId, const unitree::robot::Request&) {
+            if (cmdVelPublisher)
+            {
+                cmdVelPublisher->LockJoints();
+            }
+            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandDown);
+            PublishFsmCommandIfMapped(cmdCtlPublisher, apiId);
+        });
+
+    bridge.RegisterSportRequestHandler(
+        unitree::robot::go2::ROBOT_SPORT_API_ID_RECOVERYSTAND,
+        [&motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher](
+            int32_t apiId, const unitree::robot::Request&) {
+            if (cmdVelPublisher)
+            {
+                cmdVelPublisher->LockJoints();
+            }
+            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandUp);
+            PublishFsmCommandIfMapped(cmdCtlPublisher, apiId);
+        });
+
     bridge.RegisterDampHandler([cmdVelPublisher, cmdCtlPublisher, &motionSwitcherBridge](
         const SportEventResult& result) {
         HandleSportEvent("DAMP", result);
@@ -229,46 +265,16 @@ static void RegisterSportEventLogging(
         }
     });
 
-    bridge.RegisterStandUpHandler([&motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher](
-        const SportEventResult& result) {
+    bridge.RegisterStandUpHandler([](const SportEventResult& result) {
         HandleSportEvent("STANDUP", result);
-        if (result.IsSuccess())
-        {
-            if (cmdVelPublisher)
-            {
-                cmdVelPublisher->LockJoints();
-            }
-            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandUp);
-            PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
-        }
     });
 
-    bridge.RegisterStandDownHandler([&motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher](
-        const SportEventResult& result) {
+    bridge.RegisterStandDownHandler([](const SportEventResult& result) {
         HandleSportEvent("STANDDOWN", result);
-        if (result.IsSuccess())
-        {
-            if (cmdVelPublisher)
-            {
-                cmdVelPublisher->LockJoints();
-            }
-            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandDown);
-            PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
-        }
     });
 
-    bridge.RegisterRecoveryStandHandler([&motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher](
-        const SportEventResult& result) {
+    bridge.RegisterRecoveryStandHandler([](const SportEventResult& result) {
         HandleSportEvent("RECOVERYSTAND", result);
-        if (result.IsSuccess())
-        {
-            if (cmdVelPublisher)
-            {
-                cmdVelPublisher->LockJoints();
-            }
-            motionSwitcherBridge.SetRobotPosture(RobotPosture::StandUp);
-            PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
-        }
     });
 
     bridge.RegisterFreeWalkHandler([cmdVelPublisher](const SportEventResult& result) {
@@ -393,7 +399,8 @@ int main(int argc, char** argv)
         std::cout << "MOVE -> /cmd_vel (geometry_msgs/Twist)" << std::endl;
         std::cout << "SWITCHMOVEMODE -> continuous MOVE on/off (auto stop after 1s when off)" << std::endl;
         std::cout << "SPEEDLEVEL -> max linear speed 1.5 m/s (slow, default) or 3.5 m/s (fast)" << std::endl;
-        std::cout << "STANDUP/STANDDOWN/RECOVERYSTAND -> lock joints (MOVE blocked)" << std::endl;
+        std::cout << "STANDUP/STANDDOWN/RECOVERYSTAND -> /cmd_ctl immediately, success after 2s" << std::endl;
+        std::cout << "STANDUP/RECOVERYSTAND -> lock joints (MOVE blocked)" << std::endl;
         std::cout << "BALANCESTAND -> unlock joints (MOVE allowed)" << std::endl;
         std::cout << "SWITCHGAIT 0 -> lock, 1-4 -> unlock" << std::endl;
         std::cout << "VISIONWALK/CLASSICWALK/FASTWALK true -> unlock, false -> lock" << std::endl;

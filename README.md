@@ -247,6 +247,10 @@ Publishes `std_msgs/msg/Int32` with a 5-digit command code in `data`:
 | STANDDOWN | stop `/cmd_vel` (zero) + `10002` on `/cmd_ctl` | Stop, then get down |
 | DAMP | stop `/cmd_vel` (zero) + `10003` on `/cmd_ctl` | Stop, then passive (damped motors) |
 
+### Stand up / stand down response delay
+
+`STANDUP`, `STANDDOWN`, and `RECOVERYSTAND` publish `/cmd_ctl` immediately when the request is received, but the DDS success response (`0`) is delayed by **2 seconds** to approximate the time the robot needs to finish sitting or standing. Other sport APIs still respond immediately.
+
 Example:
 
 ```bash
@@ -261,7 +265,7 @@ ros2 topic pub /cmd_ctl std_msgs/msg/Int32 "{data: 10001}"
 | `3104` | Client API timeout (robot did not respond in time) |
 | other | See Unitree SDK internal / sport error definitions |
 
-In intercept mode, the bridge responds with `0` immediately so the SDK client does not wait for the real robot.
+In intercept mode, most sport APIs respond with `0` immediately. `STANDUP`, `STANDDOWN`, and `RECOVERYSTAND` wait about 2 seconds before returning success.
 
 ## Important notes
 

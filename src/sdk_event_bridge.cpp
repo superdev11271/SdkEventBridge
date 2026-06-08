@@ -1,5 +1,7 @@
 #include "sdk_event_bridge.hpp"
 
+#include <thread>
+
 #include <unitree/robot/channel/channel_factory.hpp>
 #include <unitree/robot/go2/sport/sport_error.hpp>
 #include <unitree/robot/internal/internal_api.hpp>
@@ -236,6 +238,19 @@ bool SdkEventBridgeClass::IsSuccess(int32_t statusCode)
     return statusCode == SPORT_STATUS_SUCCESS;
 }
 
+bool SdkEventBridgeClass::RequiresPostureActionDelay(int32_t apiId)
+{
+    switch (apiId)
+    {
+    case unitree::robot::go2::ROBOT_SPORT_API_ID_STANDUP:
+    case unitree::robot::go2::ROBOT_SPORT_API_ID_STANDDOWN:
+    case unitree::robot::go2::ROBOT_SPORT_API_ID_RECOVERYSTAND:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool SdkEventBridgeClass::IsTrackedSportApi(int32_t apiId)
 {
     switch (apiId)
@@ -313,9 +328,32 @@ void SdkEventBridgeClass::HandleInterceptedRequest(const unitree::robot::Request
 
     int32_t statusCode = SPORT_STATUS_SUCCESS;
     const std::string responseData = BuildInterceptResponseData(apiId, request, statusCode);
+    const bool deferSuccessEvent =
+        IsTrackedSportApi(apiId) &&
+        RequiresPostureActionDelay(apiId) &&
+        statusCode == SPORT_STATUS_SUCCESS;
+
+    if (IsTrackedSportApi(apiId) && !deferSuccessEvent)
+    {
+        SportEventResult result;
+        result.apiId = apiId;
+        result.requestId = request.header().identity().id();
+        result.statusCode = statusCode;
+        result.parameter = request.parameter();
+        result.data = responseData;
+        result.responseLatencyMs = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::steady_clock::now() - startedAt).count();
+        DispatchEventResult(result);
+    }
+
+    if (deferSuccessEvent)
+    {
+        std::this_thread::sleep_for(POSTURE_ACTION_RESPONSE_DELAY);
+    }
+
     const unitree::robot::Response response = BuildInterceptResponse(request, statusCode, responseData);
 
-    if (IsTrackedSportApi(apiId))
+    if (deferSuccessEvent)
     {
         SportEventResult result;
         result.apiId = apiId;
