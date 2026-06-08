@@ -22,6 +22,7 @@ SdkEventBridge listens for those commands, handles them locally, and bridges eve
   - STANDDOWN
   - RECOVERYSTAND
   - FREEWALK
+  - SWITCHMOVEMODE
 - Publish ROS2 `geometry_msgs/msg/Twist` to `/cmd_vel` on MOVE and STOPMOVE
 - Publish ROS2 `std_msgs/msg/Int32` to `/cmd_ctl` for FSM / simulation commands
 - Passive mode for observation-only use
@@ -124,6 +125,19 @@ ros2 topic pub /cmd_vel geometry_msgs/msg/Twist \
 
 On STOPMOVE, the bridge publishes zero velocity to `/cmd_vel`.
 
+## SwitchMoveMode (continuous MOVE)
+
+`SwitchMoveMode(bool flag)` switches how MOVE is bridged to `/cmd_vel`:
+
+| `flag` | Behavior |
+|--------|----------|
+| `true` | Continuous response mode: latest MOVE velocity is kept until a new command or explicit stop |
+| `false` | Default mode: if no new MOVE arrives within 1 second, `/cmd_vel` is published as zero (auto stop) |
+
+Parameter JSON uses `{"data": true}` or `{"data": false}` (also accepts `flag`).
+
+STOPMOVE, STANDDOWN, and DAMP always stop immediately regardless of mode.
+
 ## ROS2 `/cmd_ctl` mapping (FSM / simulation)
 
 Publishes `std_msgs/msg/Int32` with a 5-digit command code in `data`:
@@ -188,6 +202,7 @@ Register handlers:
 - `RegisterStandDownHandler()`
 - `RegisterRecoveryStandHandler()`
 - `RegisterFreeWalkHandler()`
+- `RegisterSwitchMoveModeHandler()`
 
 Or use generic handlers:
 

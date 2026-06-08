@@ -65,7 +65,7 @@ static void RegisterSportEventLogging(
         {
             if (cmdVelPublisher)
             {
-                cmdVelPublisher->PublishMove(MoveVelocity{});
+                cmdVelPublisher->HandleStop();
             }
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
         }
@@ -75,7 +75,21 @@ static void RegisterSportEventLogging(
         HandleSportEvent("MOVE", result);
         if (result.IsSuccess() && cmdVelPublisher)
         {
-            cmdVelPublisher->PublishMoveFromParameter(result.parameter);
+            cmdVelPublisher->HandleMove(result.parameter);
+        }
+    });
+
+    bridge.RegisterSwitchMoveModeHandler([cmdVelPublisher](const SportEventResult& result) {
+        HandleSportEvent("SWITCHMOVEMODE", result);
+        if (!result.IsSuccess() || !cmdVelPublisher)
+        {
+            return;
+        }
+
+        bool enabled = false;
+        if (CmdVelPublisher::ParseBoolParameter(result.parameter, enabled))
+        {
+            cmdVelPublisher->SetContinuousMoveMode(enabled);
         }
     });
 
@@ -91,7 +105,7 @@ static void RegisterSportEventLogging(
         HandleSportEvent("STOPMOVE", result);
         if (result.IsSuccess() && cmdVelPublisher)
         {
-            cmdVelPublisher->PublishMove(MoveVelocity{});
+            cmdVelPublisher->HandleStop();
         }
     });
 
@@ -109,7 +123,7 @@ static void RegisterSportEventLogging(
         {
             if (cmdVelPublisher)
             {
-                cmdVelPublisher->PublishMove(MoveVelocity{});
+                cmdVelPublisher->HandleStop();
             }
             PublishFsmCommandIfMapped(cmdCtlPublisher, result.apiId);
         }
@@ -188,6 +202,7 @@ int main(int argc, char** argv)
     {
         std::cout << "Sport commands are handled locally and answered immediately (code 0)." << std::endl;
         std::cout << "MOVE -> /cmd_vel (geometry_msgs/Twist)" << std::endl;
+        std::cout << "SWITCHMOVEMODE -> continuous MOVE on/off (auto stop after 1s when off)" << std::endl;
         std::cout << "STANDUP/BALANCESTAND/RECOVERYSTAND -> /cmd_ctl 10001" << std::endl;
         std::cout << "STANDDOWN -> stop /cmd_vel, then /cmd_ctl 10002" << std::endl;
         std::cout << "DAMP -> stop /cmd_vel, then /cmd_ctl 10003" << std::endl;
@@ -196,6 +211,7 @@ int main(int argc, char** argv)
 
     while (rclcpp::ok())
     {
+        cmdVelPublisher->Tick();
         cmdVelPublisher->SpinOnce();
         cmdCtlPublisher->SpinOnce();
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
