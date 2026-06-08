@@ -93,6 +93,20 @@ static void RegisterSportEventLogging(
         }
     });
 
+    bridge.RegisterSpeedLevelHandler([cmdVelPublisher](const SportEventResult& result) {
+        HandleSportEvent("SPEEDLEVEL", result);
+        if (!result.IsSuccess() || !cmdVelPublisher)
+        {
+            return;
+        }
+
+        int level = -1;
+        if (CmdVelPublisher::ParseIntParameter(result.parameter, level))
+        {
+            cmdVelPublisher->SetSpeedLevel(level);
+        }
+    });
+
     bridge.RegisterBalanceStandHandler([cmdCtlPublisher](const SportEventResult& result) {
         HandleSportEvent("BALANCESTAND", result);
         if (result.IsSuccess())
@@ -203,6 +217,7 @@ int main(int argc, char** argv)
         std::cout << "Sport commands are handled locally and answered immediately (code 0)." << std::endl;
         std::cout << "MOVE -> /cmd_vel (geometry_msgs/Twist)" << std::endl;
         std::cout << "SWITCHMOVEMODE -> continuous MOVE on/off (auto stop after 1s when off)" << std::endl;
+        std::cout << "SPEEDLEVEL -> max linear speed 1.5 m/s (slow, default) or 3.5 m/s (fast)" << std::endl;
         std::cout << "STANDUP/BALANCESTAND/RECOVERYSTAND -> /cmd_ctl 10001" << std::endl;
         std::cout << "STANDDOWN -> stop /cmd_vel, then /cmd_ctl 10002" << std::endl;
         std::cout << "DAMP -> stop /cmd_vel, then /cmd_ctl 10003" << std::endl;

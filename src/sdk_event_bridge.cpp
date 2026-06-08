@@ -204,6 +204,11 @@ void SdkEventBridgeClass::RegisterSwitchMoveModeHandler(SportEventHandler handle
     RegisterSportEventHandler(unitree::robot::b2::ROBOT_SPORT_API_ID_SWITCHMOVEMODE, std::move(handler));
 }
 
+void SdkEventBridgeClass::RegisterSpeedLevelHandler(SportEventHandler handler)
+{
+    RegisterSportEventHandler(unitree::robot::go2::ROBOT_SPORT_API_ID_SPEEDLEVEL, std::move(handler));
+}
+
 bool SdkEventBridgeClass::IsSuccess(int32_t statusCode)
 {
     return statusCode == SPORT_STATUS_SUCCESS;
@@ -223,6 +228,7 @@ bool SdkEventBridgeClass::IsTrackedSportApi(int32_t apiId)
     case unitree::robot::go2::ROBOT_SPORT_API_ID_FREEWALK:
     case unitree::robot::b2::ROBOT_SPORT_API_ID_FREEWALK:
     case unitree::robot::b2::ROBOT_SPORT_API_ID_SWITCHMOVEMODE:
+    case unitree::robot::go2::ROBOT_SPORT_API_ID_SPEEDLEVEL:
         return true;
     default:
         return false;
@@ -412,6 +418,8 @@ std::string SdkEventBridgeClass::SportApiIdToString(int32_t apiId)
         return "FREEWALK";
     case unitree::robot::b2::ROBOT_SPORT_API_ID_SWITCHMOVEMODE:
         return "SWITCHMOVEMODE";
+    case unitree::robot::go2::ROBOT_SPORT_API_ID_SPEEDLEVEL:
+        return "SPEEDLEVEL";
     default:
         return "UNKNOWN(" + std::to_string(apiId) + ")";
     }

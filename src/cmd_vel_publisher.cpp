@@ -1,5 +1,6 @@
 #include "cmd_vel_publisher.hpp"
 
+#include <cmath>
 #include <iostream>
 
 #include <unitree/common/json/jsonize.hpp>
@@ -10,7 +11,8 @@ namespace sdk_event_bridge
 CmdVelPublisher::CmdVelPublisher(const std::string& topicName)
     : mNode(std::make_shared<rclcpp::Node>("sdk_event_bridge_cmd_vel")),
       m_continuousMoveMode(false),
-      m_hasActiveMove(false)
+      m_hasActiveMove(false),
+      m_maxLinearSpeed(LOW_MAX_LINEAR_SPEED)
 {
     mPublisher = mNode->create_publisher<geometry_msgs::msg::Twist>(topicName, 10);
 }
@@ -32,6 +34,62 @@ void CmdVelPublisher::SetContinuousMoveMode(bool enabled)
 bool CmdVelPublisher::IsContinuousMoveModeEnabled() const
 {
     return m_continuousMoveMode;
+}
+
+void CmdVelPublisher::SetSpeedLevel(int level)
+{
+    if (level == 1)
+    {
+        m_maxLinearSpeed = HIGH_MAX_LINEAR_SPEED;
+        std::cout << "[speed_level] fast, max linear speed=" << m_maxLinearSpeed << " m/s" << std::endl;
+    }
+    else
+    {
+        m_maxLinearSpeed = LOW_MAX_LINEAR_SPEED;
+        std::cout << "[speed_level] slow, max linear speed=" << m_maxLinearSpeed << " m/s" << std::endl;
+    }
+
+    if (m_hasActiveMove)
+    {
+        m_lastVelocity = ApplySpeedLimit(m_lastVelocity);
+        PublishMove(m_lastVelocity);
+    }
+}
+
+double CmdVelPublisher::GetMaxLinearSpeed() const
+{
+    return m_maxLinearSpeed;
+}
+
+bool CmdVelPublisher::ParseIntParameter(const std::string& parameterJson, int& value)
+{
+    if (parameterJson.empty())
+    {
+        return false;
+    }
+
+    try
+    {
+        const unitree::common::Any jsonAny = unitree::common::FromJsonString(parameterJson);
+        if (!unitree::common::IsJsonMap(jsonAny))
+        {
+            return false;
+        }
+
+        const unitree::common::JsonMap& jsonMap = unitree::common::AnyCast<unitree::common::JsonMap>(jsonAny);
+        const auto dataIt = jsonMap.find("data");
+        if (dataIt != jsonMap.end())
+        {
+            unitree::common::FromJson(dataIt->second, value);
+            return true;
+        }
+    }
+    catch (const std::exception& ex)
+    {
+        std::cerr << "Failed to parse int parameter: " << ex.what() << std::endl;
+    }
+
+    return false;
 }
 
 bool CmdVelPublisher::ParseBoolParameter(const std::string& parameterJson, bool& value)
@@ -114,6 +172,20 @@ MoveVelocity CmdVelPublisher::ParseMoveParameter(const std::string& parameterJso
     return velocity;
 }
 
+MoveVelocity CmdVelPublisher::ApplySpeedLimit(const MoveVelocity& velocity) const
+{
+    MoveVelocity limited = velocity;
+    const double magnitude = std::hypot(limited.vx, limited.vy);
+    if (magnitude > m_maxLinearSpeed && magnitude > 0.0)
+    {
+        const double scale = m_maxLinearSpeed / magnitude;
+        limited.vx *= scale;
+        limited.vy *= scale;
+    }
+
+    return limited;
+}
+
 void CmdVelPublisher::PublishMove(const MoveVelocity& velocity)
 {
     geometry_msgs::msg::Twist twist;
@@ -139,7 +211,7 @@ void CmdVelPublisher::PublishStop()
 
 void CmdVelPublisher::HandleMove(const std::string& parameterJson)
 {
-    m_lastVelocity = ParseMoveParameter(parameterJson);
+    m_lastVelocity = ApplySpeedLimit(ParseMoveParameter(parameterJson));
     m_lastMoveTime = std::chrono::steady_clock::now();
     m_hasActiveMove = true;
     PublishMove(m_lastVelocity);

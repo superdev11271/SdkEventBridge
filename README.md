@@ -23,6 +23,7 @@ SdkEventBridge listens for those commands, handles them locally, and bridges eve
   - RECOVERYSTAND
   - FREEWALK
   - SWITCHMOVEMODE
+  - SPEEDLEVEL
 - Publish ROS2 `geometry_msgs/msg/Twist` to `/cmd_vel` on MOVE and STOPMOVE
 - Publish ROS2 `std_msgs/msg/Int32` to `/cmd_ctl` for FSM / simulation commands
 - Passive mode for observation-only use
@@ -138,6 +139,19 @@ Parameter JSON uses `{"data": true}` or `{"data": false}` (also accepts `flag`).
 
 STOPMOVE, STANDDOWN, and DAMP always stop immediately regardless of mode.
 
+## SpeedLevel (max linear speed)
+
+`SpeedLevel(int level)` limits MOVE linear velocity magnitude on `/cmd_vel`:
+
+| `level` | Mode | Max linear speed |
+|---------|------|------------------|
+| `-1` | Slow (default) | 1.5 m/s |
+| `1` | Fast | 3.5 m/s |
+
+Parameter JSON: `{"data": -1}` or `{"data": 1}`.
+
+Linear velocity `(vx, vy)` is scaled down if its magnitude exceeds the current max. Angular `vyaw` is not clamped.
+
 ## ROS2 `/cmd_ctl` mapping (FSM / simulation)
 
 Publishes `std_msgs/msg/Int32` with a 5-digit command code in `data`:
@@ -203,6 +217,7 @@ Register handlers:
 - `RegisterRecoveryStandHandler()`
 - `RegisterFreeWalkHandler()`
 - `RegisterSwitchMoveModeHandler()`
+- `RegisterSpeedLevelHandler()`
 
 Or use generic handlers:
 
