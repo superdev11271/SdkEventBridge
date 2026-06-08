@@ -190,16 +190,16 @@ STOPMOVE, STANDDOWN, and DAMP always stop immediately regardless of mode.
 
 ## SpeedLevel (max linear speed)
 
-`SpeedLevel(int level)` limits MOVE linear velocity magnitude on `/cmd_vel`:
+`SpeedLevel(int level)` limits MOVE linear velocity magnitude on `/cmd_vel`. The cap also depends on the active motion switcher mode (`SelectMode`):
 
-| `level` | Mode | Max linear speed |
-|---------|------|------------------|
-| `-1` | Slow (default) | 1.5 m/s |
-| `1` | Fast | 3.5 m/s |
+| Motion profile | `SelectMode` name | Max linear speed |
+|----------------|-------------------|--------------------|
+| AI (default) | `ai` | 1.5 m/s slow (`level=-1`), 3.5 m/s fast (`level=1`) |
+| Sport | `normal` | 6.0 m/s (fixed; `SpeedLevel` ignored) |
 
-Parameter JSON: `{"data": -1}` or `{"data": 1}`.
+Parameter JSON for AI mode: `{"data": -1}` or `{"data": 1}`.
 
-Linear velocity `(vx, vy)` is scaled down if its magnitude exceeds the current max. Angular `vyaw` is not clamped.
+`ReleaseMode` resets the profile to AI limits. Linear velocity `(vx, vy)` is scaled down if its magnitude exceeds the current max. Angular `vyaw` is not clamped.
 
 ## Joint lock / unlock (MOVE gating)
 
@@ -233,7 +233,7 @@ These sport APIs enable or disable locomotion gaits. When enabled, joints are **
 
 B2 sport client menu IDs (for reference): `11`=free walk, `12`=classic walk, `13`=fast walk.
 
-`SpeedLevel` still applies to MOVE velocity clamping in any walk mode.
+`SpeedLevel` applies to MOVE velocity clamping in AI mode only; sport mode is fixed at 6.0 m/s.
 
 ## ROS2 `/cmd_ctl` mapping (FSM / simulation)
 

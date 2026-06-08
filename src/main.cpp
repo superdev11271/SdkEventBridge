@@ -56,7 +56,9 @@ static void HandleMotionSwitcherEvent(
               << " requestId=" << result.requestId << std::endl;
 }
 
-static void RegisterMotionSwitcherEventLogging(MotionSwitcherBridgeClass& bridge)
+static void RegisterMotionSwitcherEventLogging(
+    MotionSwitcherBridgeClass& bridge,
+    const std::shared_ptr<CmdVelPublisher>& cmdVelPublisher)
 {
     bridge.SetRequestHandler([](int32_t apiId, const unitree::robot::Request& request) {
         std::cout << "[motion_switcher/request] api="
@@ -69,12 +71,26 @@ static void RegisterMotionSwitcherEventLogging(MotionSwitcherBridgeClass& bridge
         HandleMotionSwitcherEvent("CHECK_MODE", result);
     });
 
-    bridge.RegisterSelectModeHandler([](const MotionSwitcherEventResult& result) {
+    bridge.RegisterSelectModeHandler([cmdVelPublisher](const MotionSwitcherEventResult& result) {
         HandleMotionSwitcherEvent("SELECT_MODE", result);
+        if (!result.IsSuccess() || !cmdVelPublisher)
+        {
+            return;
+        }
+
+        std::string modeName;
+        if (CmdVelPublisher::ParseStringParameter(result.parameter, "name", modeName))
+        {
+            cmdVelPublisher->SetMotionModeName(modeName);
+        }
     });
 
-    bridge.RegisterReleaseModeHandler([](const MotionSwitcherEventResult& result) {
+    bridge.RegisterReleaseModeHandler([cmdVelPublisher](const MotionSwitcherEventResult& result) {
         HandleMotionSwitcherEvent("RELEASE_MODE", result);
+        if (result.IsSuccess() && cmdVelPublisher)
+        {
+            cmdVelPublisher->SetMotionModeName("ai");
+        }
     });
 
     bridge.RegisterSetSilentHandler([](const MotionSwitcherEventResult& result) {
@@ -376,7 +392,7 @@ int main(int argc, char** argv)
 
     sportBridge.Init();
     RegisterSportEventLogging(sportBridge, motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher);
-    RegisterMotionSwitcherEventLogging(motionSwitcherBridge);
+    RegisterMotionSwitcherEventLogging(motionSwitcherBridge, cmdVelPublisher);
 
     sportBridge.Start();
     motionSwitcherBridge.Start();
@@ -398,7 +414,7 @@ int main(int argc, char** argv)
         std::cout << "Sport commands are handled locally and answered immediately (code 0)." << std::endl;
         std::cout << "MOVE -> /cmd_vel (geometry_msgs/Twist)" << std::endl;
         std::cout << "SWITCHMOVEMODE -> continuous MOVE on/off (auto stop after 1s when off)" << std::endl;
-        std::cout << "SPEEDLEVEL -> max linear speed 1.5 m/s (slow, default) or 3.5 m/s (fast)" << std::endl;
+        std::cout << "SPEEDLEVEL -> AI only: 1.5/3.5 m/s slow/fast; sport (normal): fixed 6.0 m/s" << std::endl;
         std::cout << "STANDUP/STANDDOWN/RECOVERYSTAND -> /cmd_ctl immediately, success after 2s" << std::endl;
         std::cout << "STANDUP/RECOVERYSTAND -> lock joints (MOVE blocked)" << std::endl;
         std::cout << "BALANCESTAND -> unlock joints (MOVE allowed)" << std::endl;

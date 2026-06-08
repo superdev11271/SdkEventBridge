@@ -14,7 +14,9 @@ CmdVelPublisher::CmdVelPublisher(const std::string& topicName)
       m_jointsLocked(true),
       m_walkMode(WalkMode::None),
       m_hasActiveMove(false),
-      m_maxLinearSpeed(LOW_MAX_LINEAR_SPEED)
+      m_motionProfile(MotionProfile::Ai),
+      m_speedLevel(-1),
+      m_maxLinearSpeed(AI_LOW_MAX_LINEAR_SPEED)
 {
     mPublisher = mNode->create_publisher<geometry_msgs::msg::Twist>(topicName, 10);
 }
@@ -40,22 +42,84 @@ bool CmdVelPublisher::IsContinuousMoveModeEnabled() const
 
 void CmdVelPublisher::SetSpeedLevel(int level)
 {
-    if (level == 1)
+    m_speedLevel = level;
+
+    if (m_motionProfile == MotionProfile::Sport)
     {
-        m_maxLinearSpeed = HIGH_MAX_LINEAR_SPEED;
-        std::cout << "[speed_level] fast, max linear speed=" << m_maxLinearSpeed << " m/s" << std::endl;
+        std::cout << "[speed_level] ignored in sport profile (fixed "
+                  << SPORT_MAX_LINEAR_SPEED << " m/s)" << std::endl;
+        return;
     }
-    else
-    {
-        m_maxLinearSpeed = LOW_MAX_LINEAR_SPEED;
-        std::cout << "[speed_level] slow, max linear speed=" << m_maxLinearSpeed << " m/s" << std::endl;
-    }
+
+    ApplyMaxLinearSpeed();
 
     if (!m_jointsLocked && m_hasActiveMove)
     {
         m_lastVelocity = ApplySpeedLimit(m_lastVelocity);
         PublishMove(m_lastVelocity);
     }
+}
+
+MotionProfile CmdVelPublisher::MotionProfileFromModeName(const std::string& name)
+{
+    if (name == "normal" || name == "normal-w")
+    {
+        return MotionProfile::Sport;
+    }
+
+    return MotionProfile::Ai;
+}
+
+const char* CmdVelPublisher::MotionProfileToString(MotionProfile profile)
+{
+    switch (profile)
+    {
+    case MotionProfile::Sport:
+        return "sport";
+    case MotionProfile::Ai:
+    default:
+        return "ai";
+    }
+}
+
+void CmdVelPublisher::ApplyMaxLinearSpeed()
+{
+    if (m_motionProfile == MotionProfile::Sport)
+    {
+        m_maxLinearSpeed = SPORT_MAX_LINEAR_SPEED;
+        std::cout << "[speed_level] profile=sport max linear speed="
+                  << m_maxLinearSpeed << " m/s" << std::endl;
+        return;
+    }
+
+    m_maxLinearSpeed = m_speedLevel == 1 ? AI_HIGH_MAX_LINEAR_SPEED : AI_LOW_MAX_LINEAR_SPEED;
+    std::cout << "[speed_level] profile=ai level=" << m_speedLevel
+              << " max linear speed=" << m_maxLinearSpeed << " m/s" << std::endl;
+}
+
+void CmdVelPublisher::SetMotionModeName(const std::string& name)
+{
+    const MotionProfile profile = MotionProfileFromModeName(name);
+    if (m_motionProfile == profile)
+    {
+        return;
+    }
+
+    m_motionProfile = profile;
+    std::cout << "[motion_profile] mode=\"" << name << "\" -> "
+              << MotionProfileToString(profile) << std::endl;
+    ApplyMaxLinearSpeed();
+
+    if (!m_jointsLocked && m_hasActiveMove)
+    {
+        m_lastVelocity = ApplySpeedLimit(m_lastVelocity);
+        PublishMove(m_lastVelocity);
+    }
+}
+
+MotionProfile CmdVelPublisher::GetMotionProfile() const
+{
+    return m_motionProfile;
 }
 
 void CmdVelPublisher::LockJoints()
@@ -195,6 +259,40 @@ bool CmdVelPublisher::ParseIntParameter(const std::string& parameterJson, int& v
     catch (const std::exception& ex)
     {
         std::cerr << "Failed to parse int parameter: " << ex.what() << std::endl;
+    }
+
+    return false;
+}
+
+bool CmdVelPublisher::ParseStringParameter(
+    const std::string& parameterJson,
+    const std::string& key,
+    std::string& value)
+{
+    if (parameterJson.empty())
+    {
+        return false;
+    }
+
+    try
+    {
+        const unitree::common::Any jsonAny = unitree::common::FromJsonString(parameterJson);
+        if (!unitree::common::IsJsonMap(jsonAny))
+        {
+            return false;
+        }
+
+        const unitree::common::JsonMap& jsonMap = unitree::common::AnyCast<unitree::common::JsonMap>(jsonAny);
+        const auto keyIt = jsonMap.find(key);
+        if (keyIt != jsonMap.end())
+        {
+            unitree::common::FromJson(keyIt->second, value);
+            return true;
+        }
+    }
+    catch (const std::exception& ex)
+    {
+        std::cerr << "Failed to parse string parameter: " << ex.what() << std::endl;
     }
 
     return false;
