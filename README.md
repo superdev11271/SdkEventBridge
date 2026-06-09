@@ -64,20 +64,20 @@ cmake --build .
 
 ```bash
 source /opt/ros/humble/setup.bash
-./sdk_event_bridge_demo <networkInterface> [domainId] [mode]
+./sdk_event_bridge <networkInterface> [domainId] [mode]
 ```
 
 Examples:
 
 ```bash
 # Intercept mode on eth0 (default)
-./sdk_event_bridge_demo eth0
+./sdk_event_bridge eth0
 
 # Local test without robot
-./sdk_event_bridge_demo lo 0 intercept
+./sdk_event_bridge lo 0 intercept
 
 # Passive observe-only mode
-./sdk_event_bridge_demo eth0 0 passive
+./sdk_event_bridge eth0 0 passive
 ```
 
 ### Typical workflow
@@ -86,7 +86,7 @@ Terminal 1:
 
 ```bash
 source /opt/ros/humble/setup.bash
-./sdk_event_bridge_demo eth0
+./sdk_event_bridge eth0
 ```
 
 Terminal 2:

@@ -10,17 +10,17 @@ find_package(rclcpp REQUIRED)
 find_package(geometry_msgs REQUIRED)
 find_package(std_msgs REQUIRED)
 
-add_library(sdk_event_bridge STATIC
+add_library(sdk_event_bridge_lib STATIC
     src/sdk_event_bridge.cpp
     src/motion_switcher_bridge.cpp
     src/cmd_vel_publisher.cpp
     src/cmd_ctl_publisher.cpp
 )
-target_include_directories(sdk_event_bridge
+target_include_directories(sdk_event_bridge_lib
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
-target_link_libraries(sdk_event_bridge
+target_link_libraries(sdk_event_bridge_lib
     PUBLIC
         unitree_sdk2
         rclcpp::rclcpp
@@ -28,5 +28,5 @@ target_link_libraries(sdk_event_bridge
         std_msgs::std_msgs__rosidl_typesupport_cpp
 )
 
-add_executable(sdk_event_bridge_demo src/main.cpp)
-target_link_libraries(sdk_event_bridge_demo PRIVATE sdk_event_bridge)
+add_executable(sdk_event_bridge src/main.cpp)
+target_link_libraries(sdk_event_bridge PRIVATE sdk_event_bridge_lib)
