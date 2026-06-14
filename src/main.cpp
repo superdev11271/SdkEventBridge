@@ -372,7 +372,7 @@ int main(int argc, char** argv)
     const std::string networkInterface = argv[1];
     constexpr int32_t domainId = 0;
 
-    auto cmdVelPublisher = std::make_shared<CmdVelPublisher>("/cmd_vel");
+    auto cmdVelPublisher = std::make_shared<CmdVelPublisher>("/cmd_vel_origin");
     auto cmdCtlPublisher = std::make_shared<CmdCtlPublisher>("/cmd_ctl");
 
     SdkEventBridgeClass sportBridge(domainId, networkInterface);
@@ -415,13 +415,13 @@ int main(int argc, char** argv)
               << " sport_response=" << SPORT_RESPONSE_TOPIC
               << " motion_switcher_request=" << MOTION_SWITCHER_REQUEST_TOPIC
               << " motion_switcher_response=" << MOTION_SWITCHER_RESPONSE_TOPIC
-              << " ros_cmd_vel=/cmd_vel (DDS wire: rt/cmd_vel)"
+              << " ros_cmd_vel=/cmd_vel_origin (DDS wire: rt/cmd_vel_origin)"
               << " ros_cmd_ctl=/cmd_ctl (DDS wire: rt/cmd_ctl)"
               << " ros_reset=/reset (DDS wire: rt/reset)"
               << " interface=" << networkInterface << std::endl;
 
     std::cout << "Sport commands are handled locally and answered immediately (code 0)." << std::endl;
-    std::cout << "MOVE -> /cmd_vel (geometry_msgs/msg/Twist via Unitree DDS)" << std::endl;
+    std::cout << "MOVE -> /cmd_vel_origin (geometry_msgs/msg/Twist via Unitree DDS)" << std::endl;
     std::cout << "SWITCHMOVEMODE -> continuous MOVE on/off (auto stop after 1s when off)" << std::endl;
     std::cout << "SPEEDLEVEL -> AI only: 1.5/3.5 m/s slow/fast; sport (normal): fixed 6.0 m/s" << std::endl;
     std::cout << "STANDUP/STANDDOWN/RECOVERYSTAND -> /cmd_ctl immediately, success after 2s" << std::endl;
@@ -431,8 +431,8 @@ int main(int argc, char** argv)
     std::cout << "VISIONWALK/CLASSICWALK/FASTWALK true -> unlock, false -> lock" << std::endl;
     std::cout << "FREEWALK -> unlock joints (free gait)" << std::endl;
     std::cout << "STANDUP/BALANCESTAND/RECOVERYSTAND -> /cmd_ctl 10001" << std::endl;
-    std::cout << "STANDDOWN -> stop /cmd_vel, then /cmd_ctl 10002" << std::endl;
-    std::cout << "DAMP -> stop /cmd_vel, then /cmd_ctl 10003" << std::endl;
+    std::cout << "STANDDOWN -> stop /cmd_vel_origin, then /cmd_ctl 10002" << std::endl;
+    std::cout << "DAMP -> stop /cmd_vel_origin, then /cmd_ctl 10003" << std::endl;
     std::cout << "Motion switcher: SELECT_MODE/RELEASE_MODE only allowed in stand down posture"
               << " (error 7002 when stand up or walking)." << std::endl;
     std::cout << "Publish geometry_msgs/msg/Pose to /reset to restore ai mode and normal speed."

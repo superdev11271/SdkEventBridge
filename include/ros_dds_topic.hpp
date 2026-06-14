@@ -6,7 +6,7 @@
 namespace sdk_event_bridge
 {
 
-// ROS 2 (rmw_cyclonedds) maps "/cmd_vel" to the DDS topic "rt/cmd_vel".
+// ROS 2 (rmw_cyclonedds) maps "/cmd_vel_origin" to the DDS topic "rt/cmd_vel_origin".
 // Unitree ChannelPublisher uses the topic string verbatim, so convert here.
 inline std::string ToRosDdsTopicName(const std::string& topicName)
 {

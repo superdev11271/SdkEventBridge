@@ -46,7 +46,7 @@ public:
     static constexpr double LOW_MAX_LINEAR_SPEED = AI_LOW_MAX_LINEAR_SPEED;
     static constexpr double HIGH_MAX_LINEAR_SPEED = AI_HIGH_MAX_LINEAR_SPEED;
 
-    explicit CmdVelPublisher(const std::string& topicName = "/cmd_vel");
+    explicit CmdVelPublisher(const std::string& topicName = "/cmd_vel_origin");
     ~CmdVelPublisher();
 
     CmdVelPublisher(const CmdVelPublisher&) = delete;

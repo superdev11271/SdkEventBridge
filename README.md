@@ -1,6 +1,6 @@
 # SdkEventBridge
 
-Intercept Unitree SDK2 sport and motion switcher commands over DDS, handle them in your own program, and publish sport events to simulation topics (`/cmd_vel`, `/cmd_ctl`) via Unitree SDK2 DDS channels.
+Intercept Unitree SDK2 sport and motion switcher commands over DDS, handle them in your own program, and publish sport events to simulation topics (`/cmd_vel_origin`, `/cmd_ctl`) via Unitree SDK2 DDS channels.
 
 When a sport client (for example `b2_sport_client` or `go2_sport_client`) sends a command, Unitree SDK2 publishes on these internal DDS topics:
 
@@ -39,7 +39,7 @@ SdkEventBridge listens for those commands, handles them locally, and bridges spo
   - RELEASE_MODE
   - SET_SILENT
   - GET_SILENT
-- Publish DDS `geometry_msgs/msg/Twist` to `/cmd_vel` on MOVE and STOPMOVE (Unitree SDK2 `ChannelPublisher`)
+- Publish DDS `geometry_msgs/msg/Twist` to `/cmd_vel_origin` on MOVE and STOPMOVE (Unitree SDK2 `ChannelPublisher`)
 - Publish DDS `std_msgs/msg/Int32` to `/cmd_ctl` for FSM / simulation commands
 
 ## Requirements
@@ -62,9 +62,9 @@ cmake --build .
 ./build/sdk_event_bridge <networkInterface>
 ```
 
-**Important:** `sdk_event_bridge` must be running before you use `b2_sport_client`. The sport client alone does not publish to `/cmd_vel` or `/cmd_ctl`.
+**Important:** `sdk_event_bridge` must be running before you use `b2_sport_client`. The sport client alone does not publish to `/cmd_vel_origin` or `/cmd_ctl`.
 
-ROS 2 (rmw_cyclonedds) maps `/cmd_ctl` to the DDS topic `rt/cmd_ctl`. The bridge publishes on `rt/cmd_vel` and `rt/cmd_ctl` so `ros2 topic echo` and the simulator can receive messages. On stand down you should see:
+ROS 2 (rmw_cyclonedds) maps `/cmd_ctl` to the DDS topic `rt/cmd_ctl`. The bridge publishes on `rt/cmd_vel_origin` and `rt/cmd_ctl` so `ros2 topic echo` and the simulator can receive messages. On stand down you should see:
 
 ```text
 [cmd_ctl] published data=10002 ... topic=rt/cmd_ctl ok=true
@@ -91,7 +91,7 @@ Terminal 2 (optional, if a ROS 2 node on the same DDS domain should observe topi
 
 ```bash
 source /opt/ros/humble/setup.bash
-ros2 topic echo /cmd_vel geometry_msgs/msg/Twist
+ros2 topic echo /cmd_vel_origin geometry_msgs/msg/Twist
 ros2 topic echo /cmd_ctl std_msgs/msg/Int32
 ```
 
@@ -103,7 +103,7 @@ Terminal 3:
 
 Test examples:
 
-- `5` or `move` → `/cmd_vel`
+- `5` or `move` → `/cmd_vel_origin`
 - `3` or `stand_down` → `/cmd_ctl` data=`10002`
 - `0` or `damp` → `/cmd_ctl` data=`10003`
 - stand up / recovery stand → `/cmd_ctl` data=`10001`
@@ -136,13 +136,13 @@ Posture is derived from sport events:
 |---------|--------------|
 | Stand down | `STANDDOWN`, `DAMP` |
 | Stand up | `STANDUP`, `BALANCESTAND`, `RECOVERYSTAND`, `STOPMOVE` |
-| Walking | `MOVE` with non-zero velocity (or active `/cmd_vel` until auto-stop) |
+| Walking | `MOVE` with non-zero velocity (or active `/cmd_vel_origin` until auto-stop) |
 
 `CheckMode`, `SetSilent`, and `GetSilent` are always allowed.
 
 Low-level examples that call `MotionSwitcherClient` (for example `b2_stand_example`) can use the bridge to release motion control without the real robot.
 
-## ROS2 `/cmd_vel` mapping
+## ROS2 `/cmd_vel_origin` mapping
 
 On MOVE, the bridge parses the Unitree move JSON parameter and publishes a `Twist`:
 
@@ -161,20 +161,20 @@ Example Unitree parameter:
 Equivalent ROS2 message:
 
 ```bash
-ros2 topic pub /cmd_vel geometry_msgs/msg/Twist \
+ros2 topic pub /cmd_vel_origin geometry_msgs/msg/Twist \
   "{linear: {x: 0.5, y: 0.0, z: 0.0}, angular: {x: 0.0, y: 0.0, z: 0.0}}"
 ```
 
-On STOPMOVE, the bridge publishes zero velocity to `/cmd_vel`.
+On STOPMOVE, the bridge publishes zero velocity to `/cmd_vel_origin`.
 
 ## SwitchMoveMode (continuous MOVE)
 
-`SwitchMoveMode(bool flag)` switches how MOVE is bridged to `/cmd_vel`:
+`SwitchMoveMode(bool flag)` switches how MOVE is bridged to `/cmd_vel_origin`:
 
 | `flag` | Behavior |
 |--------|----------|
 | `true` | Continuous response mode: latest MOVE velocity is kept until a new command or explicit stop |
-| `false` | Default mode: if no new MOVE arrives within 1 second, `/cmd_vel` is published as zero (auto stop) |
+| `false` | Default mode: if no new MOVE arrives within 1 second, `/cmd_vel_origin` is published as zero (auto stop) |
 
 Parameter JSON uses `{"data": true}` or `{"data": false}` (also accepts `flag`).
 
@@ -182,7 +182,7 @@ STOPMOVE, STANDDOWN, and DAMP always stop immediately regardless of mode.
 
 ## SpeedLevel (max linear speed)
 
-`SpeedLevel(int level)` limits MOVE linear velocity magnitude on `/cmd_vel`. The cap also depends on the active motion switcher mode (`SelectMode`):
+`SpeedLevel(int level)` limits MOVE linear velocity magnitude on `/cmd_vel_origin`. The cap also depends on the active motion switcher mode (`SelectMode`):
 
 | Motion profile | `SelectMode` name | Max linear speed |
 |----------------|-------------------|--------------------|
@@ -195,7 +195,7 @@ Parameter JSON for AI mode: `{"data": -1}` or `{"data": 1}`.
 
 ## Joint lock / unlock (MOVE gating)
 
-MOVE commands are only published to `/cmd_vel` when joints are **unlocked**. Default state is **locked**.
+MOVE commands are only published to `/cmd_vel_origin` when joints are **unlocked**. Default state is **locked**.
 
 | Event | Lock state | Effect |
 |-------|------------|--------|
@@ -236,8 +236,8 @@ Publishes `std_msgs/msg/Int32` with a 5-digit command code in `data`:
 | STANDUP | `10001` | Get up → locomotion |
 | BALANCESTAND | `10001` | Get up → locomotion |
 | RECOVERYSTAND | `10001` | Get up → locomotion |
-| STANDDOWN | stop `/cmd_vel` (zero) + `10002` on `/cmd_ctl` | Stop, then get down |
-| DAMP | stop `/cmd_vel` (zero) + `10003` on `/cmd_ctl` | Stop, then passive (damped motors) |
+| STANDDOWN | stop `/cmd_vel_origin` (zero) + `10002` on `/cmd_ctl` | Stop, then get down |
+| DAMP | stop `/cmd_vel_origin` (zero) + `10003` on `/cmd_ctl` | Stop, then passive (damped motors) |
 
 ### Stand up / stand down response delay
 
@@ -264,7 +264,7 @@ Commands are handled locally. Most sport APIs respond with `0` immediately. `STA
 1. Use the same network interface as your sport client (`eth0`, `lo`, etc.).
 2. DDS is pub/sub. If the real robot is online on the same network and domain, it may still receive published requests.
 3. To fully block the robot during development, keep it off the same DDS network or use an isolated interface such as `lo`.
-4. `b2_sport_client` test move uses `Move(0.0, 0.0, 0.5)`, which maps to `angular.z = 0.5`, not forward motion. Use `Move(0.5, 0.0, 0.0)` for forward `/cmd_vel.linear.x = 0.5`.
+4. `b2_sport_client` test move uses `Move(0.0, 0.0, 0.5)`, which maps to `angular.z = 0.5`, not forward motion. Use `Move(0.5, 0.0, 0.0)` for forward `/cmd_vel_origin.linear.x = 0.5`.
 
 ## Library usage
 
