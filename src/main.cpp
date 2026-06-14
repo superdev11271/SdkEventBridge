@@ -9,6 +9,7 @@
 #include "cmd_ctl_publisher.hpp"
 #include "cmd_vel_publisher.hpp"
 #include "motion_switcher_bridge.hpp"
+#include "reset_subscriber.hpp"
 #include "sdk_event_bridge.hpp"
 
 using namespace sdk_event_bridge;
@@ -381,6 +382,27 @@ int main(int argc, char** argv)
     motionSwitcherBridge.Init();
     cmdVelPublisher->InitChannel();
     cmdCtlPublisher->InitChannel();
+
+    ResetSubscriber resetSubscriber("/reset");
+    resetSubscriber.InitChannel([&cmdVelPublisher, &motionSwitcherBridge](
+        const geometry_msgs::msg::dds_::Pose_& pose) {
+        std::cout << "[reset] received pose position=("
+                  << pose.position().x() << ", "
+                  << pose.position().y() << ", "
+                  << pose.position().z() << ") orientation=("
+                  << pose.orientation().x() << ", "
+                  << pose.orientation().y() << ", "
+                  << pose.orientation().z() << ", "
+                  << pose.orientation().w() << ")"
+                  << std::endl;
+
+        if (cmdVelPublisher)
+        {
+            cmdVelPublisher->ResetToDefaults();
+        }
+        motionSwitcherBridge.ResetToDefaults();
+    });
+
     RegisterSportEventLogging(sportBridge, motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher);
     RegisterMotionSwitcherEventLogging(motionSwitcherBridge, cmdVelPublisher);
 
@@ -395,6 +417,7 @@ int main(int argc, char** argv)
               << " motion_switcher_response=" << MOTION_SWITCHER_RESPONSE_TOPIC
               << " ros_cmd_vel=/cmd_vel (DDS wire: rt/cmd_vel)"
               << " ros_cmd_ctl=/cmd_ctl (DDS wire: rt/cmd_ctl)"
+              << " ros_reset=/reset (DDS wire: rt/reset)"
               << " interface=" << networkInterface << std::endl;
 
     std::cout << "Sport commands are handled locally and answered immediately (code 0)." << std::endl;
@@ -412,6 +435,8 @@ int main(int argc, char** argv)
     std::cout << "DAMP -> stop /cmd_vel, then /cmd_ctl 10003" << std::endl;
     std::cout << "Motion switcher: SELECT_MODE/RELEASE_MODE only allowed in stand down posture"
               << " (error 7002 when stand up or walking)." << std::endl;
+    std::cout << "Publish geometry_msgs/msg/Pose to /reset to restore ai mode and normal speed."
+              << std::endl;
     std::cout << "Keep the real robot off this DDS network to prevent it from executing commands." << std::endl;
 
     while (g_running.load())

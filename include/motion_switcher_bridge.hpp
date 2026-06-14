@@ -83,6 +83,7 @@ public:
     void SetRobotPosture(RobotPosture posture);
     RobotPosture GetRobotPosture() const;
     bool CanChangeMotionMode() const;
+    void ResetToDefaults();
 
     static bool IsTrackedApi(int32_t apiId);
     static std::string ApiIdToString(int32_t apiId);

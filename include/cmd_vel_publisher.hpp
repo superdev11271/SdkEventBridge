@@ -72,6 +72,7 @@ public:
     void SetFastWalk(bool enabled);
     WalkMode GetWalkMode() const;
 
+    void ResetToDefaults();
     void HandleMove(const std::string& parameterJson);
     void HandleStop();
     void PublishMove(const MoveVelocity& velocity);

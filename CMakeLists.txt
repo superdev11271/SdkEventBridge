@@ -13,6 +13,7 @@ add_library(sdk_event_bridge_lib STATIC
     src/cmd_vel_publisher.cpp
     src/cmd_ctl_publisher.cpp
     src/int32_.cpp
+    src/reset_subscriber.cpp
 )
 target_include_directories(sdk_event_bridge_lib
     PUBLIC

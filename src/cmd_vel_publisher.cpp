@@ -138,6 +138,23 @@ MotionProfile CmdVelPublisher::GetMotionProfile() const
     return m_motionProfile;
 }
 
+void CmdVelPublisher::ResetToDefaults()
+{
+    m_continuousMoveMode = false;
+    m_jointsLocked = true;
+    m_walkMode = WalkMode::None;
+    m_hasActiveMove = false;
+    m_motionProfile = MotionProfile::Ai;
+    m_speedLevel = -1;
+    m_maxLinearSpeed = AI_LOW_MAX_LINEAR_SPEED;
+    m_lastVelocity = MoveVelocity{};
+    m_lastMoveTime = std::chrono::steady_clock::now();
+    PublishStop();
+
+    std::cout << "[reset] cmd_vel -> ai mode, normal speed (1.5 m/s), joints locked"
+              << std::endl;
+}
+
 void CmdVelPublisher::LockJoints()
 {
     m_jointsLocked = true;

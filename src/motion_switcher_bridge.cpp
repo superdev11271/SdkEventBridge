@@ -192,6 +192,16 @@ bool MotionSwitcherBridgeClass::CanChangeMotionMode() const
     return mRobotPosture == RobotPosture::StandDown;
 }
 
+void MotionSwitcherBridgeClass::ResetToDefaults()
+{
+    mForm = "0";
+    mModeName = "ai";
+    mSilent = false;
+    mRobotPosture = RobotPosture::StandDown;
+
+    std::cout << "[reset] motion_switcher -> ai mode, stand down posture" << std::endl;
+}
+
 const char* MotionSwitcherBridgeClass::RobotPostureToString(RobotPosture posture)
 {
     switch (posture)
