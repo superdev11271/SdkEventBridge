@@ -20,7 +20,6 @@ CmdVelPublisher::CmdVelPublisher(const std::string& topicName)
       m_speedLevel(-1),
       m_maxLinearSpeed(AI_LOW_MAX_LINEAR_SPEED)
 {
-    std::cout << "[cmd_vel] DDS topic=" << mPublisher.GetChannelName() << std::endl;
 }
 
 CmdVelPublisher::~CmdVelPublisher()
@@ -42,8 +41,6 @@ void CmdVelPublisher::InitChannel()
 void CmdVelPublisher::SetContinuousMoveMode(bool enabled)
 {
     m_continuousMoveMode = enabled;
-    std::cout << "[move_mode] continuous response "
-              << (enabled ? "enabled" : "disabled") << std::endl;
 
     if (!enabled)
     {
@@ -62,8 +59,6 @@ void CmdVelPublisher::SetSpeedLevel(int level)
 
     if (m_motionProfile == MotionProfile::Sport)
     {
-        std::cout << "[speed_level] ignored in sport profile (fixed "
-                  << SPORT_MAX_LINEAR_SPEED << " m/s)" << std::endl;
         return;
     }
 
@@ -103,14 +98,10 @@ void CmdVelPublisher::ApplyMaxLinearSpeed()
     if (m_motionProfile == MotionProfile::Sport)
     {
         m_maxLinearSpeed = SPORT_MAX_LINEAR_SPEED;
-        std::cout << "[speed_level] profile=sport max linear speed="
-                  << m_maxLinearSpeed << " m/s" << std::endl;
         return;
     }
 
     m_maxLinearSpeed = m_speedLevel == 1 ? AI_HIGH_MAX_LINEAR_SPEED : AI_LOW_MAX_LINEAR_SPEED;
-    std::cout << "[speed_level] profile=ai level=" << m_speedLevel
-              << " max linear speed=" << m_maxLinearSpeed << " m/s" << std::endl;
 }
 
 void CmdVelPublisher::SetMotionModeName(const std::string& name)
@@ -122,8 +113,7 @@ void CmdVelPublisher::SetMotionModeName(const std::string& name)
     }
 
     m_motionProfile = profile;
-    std::cout << "[motion_profile] mode=\"" << name << "\" -> "
-              << MotionProfileToString(profile) << std::endl;
+    std::cout << "[vel] profile " << MotionProfileToString(profile) << std::endl;
     ApplyMaxLinearSpeed();
 
     if (!m_jointsLocked && m_hasActiveMove)
@@ -150,9 +140,6 @@ void CmdVelPublisher::ResetToDefaults()
     m_lastVelocity = MoveVelocity{};
     m_lastMoveTime = std::chrono::steady_clock::now();
     PublishStop();
-
-    std::cout << "[reset] cmd_vel -> ai mode, normal speed (1.5 m/s), joints locked"
-              << std::endl;
 }
 
 void CmdVelPublisher::LockJoints()
@@ -160,13 +147,11 @@ void CmdVelPublisher::LockJoints()
     m_jointsLocked = true;
     m_hasActiveMove = false;
     PublishStop();
-    std::cout << "[joint_lock] joints locked, MOVE blocked" << std::endl;
 }
 
 void CmdVelPublisher::UnlockJoints()
 {
     m_jointsLocked = false;
-    std::cout << "[joint_lock] joints unlocked, MOVE allowed" << std::endl;
 }
 
 void CmdVelPublisher::SetGait(int gait)
@@ -174,18 +159,14 @@ void CmdVelPublisher::SetGait(int gait)
     if (gait == 0)
     {
         LockJoints();
-        std::cout << "[gait] locked standing (gait=0)" << std::endl;
         return;
     }
 
     if (gait >= 1 && gait <= 4)
     {
         UnlockJoints();
-        std::cout << "[gait] movable gait " << gait << " (unlocked)" << std::endl;
         return;
     }
-
-    std::cout << "[gait] unknown gait " << gait << ", no lock state change" << std::endl;
 }
 
 bool CmdVelPublisher::IsJointsLocked() const
@@ -222,7 +203,6 @@ void CmdVelPublisher::SetWalkMode(WalkMode mode, bool enabled)
     {
         m_walkMode = mode;
         UnlockJoints();
-        std::cout << "[walk_mode] " << WalkModeToString(mode) << " enabled" << std::endl;
         return;
     }
 
@@ -230,7 +210,6 @@ void CmdVelPublisher::SetWalkMode(WalkMode mode, bool enabled)
     {
         m_walkMode = WalkMode::None;
         LockJoints();
-        std::cout << "[walk_mode] " << WalkModeToString(mode) << " disabled" << std::endl;
     }
 }
 
@@ -243,7 +222,6 @@ void CmdVelPublisher::SetFreeWalk()
 {
     m_walkMode = WalkMode::FreeWalk;
     UnlockJoints();
-    std::cout << "[walk_mode] free walk enabled" << std::endl;
 }
 
 void CmdVelPublisher::SetClassicWalk(bool enabled)
@@ -442,13 +420,16 @@ void CmdVelPublisher::PublishMove(const MoveVelocity& velocity)
 
     const bool wrote = mPublisher.Write(twist);
 
-    std::cout << "[cmd_vel] published linear=(" << twist.linear().x() << ", "
-              << twist.linear().y() << ", " << twist.linear().z() << ") angular=("
-              << twist.angular().x() << ", " << twist.angular().y() << ", "
-              << twist.angular().z() << ")"
-              << " topic=" << mPublisher.GetChannelName()
-              << " ok=" << (wrote ? "true" : "false")
-              << std::endl;
+    const bool isStop =
+        std::abs(velocity.vx) < 1e-9 && std::abs(velocity.vy) < 1e-9 && std::abs(velocity.vyaw) < 1e-9;
+    if (!isStop)
+    {
+        std::cout << "[vel] " << velocity.vx << ' ' << velocity.vy << ' ' << velocity.vyaw << std::endl;
+    }
+    else if (!wrote)
+    {
+        std::cerr << "[vel] publish failed" << std::endl;
+    }
 }
 
 void CmdVelPublisher::PublishStop()
@@ -460,7 +441,6 @@ void CmdVelPublisher::HandleMove(const std::string& parameterJson)
 {
     if (m_jointsLocked)
     {
-        std::cout << "[joint_lock] MOVE ignored, joints are locked" << std::endl;
         return;
     }
 
@@ -494,7 +474,6 @@ void CmdVelPublisher::Tick()
         return;
     }
 
-    std::cout << "[move_mode] no new MOVE for 1s, auto stop" << std::endl;
     m_hasActiveMove = false;
     PublishStop();
 }

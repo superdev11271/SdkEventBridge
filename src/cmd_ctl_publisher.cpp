@@ -12,7 +12,6 @@ CmdCtlPublisher::CmdCtlPublisher(const std::string& topicName)
     : mPublisher(ToRosDdsTopicName(topicName)),
       m_channelInitialized(false)
 {
-    std::cout << "[cmd_ctl] DDS topic=" << mPublisher.GetChannelName() << std::endl;
 }
 
 CmdCtlPublisher::~CmdCtlPublisher()
@@ -47,11 +46,11 @@ void CmdCtlPublisher::PublishCommand(int32_t command)
     message.data() = command;
     const bool wrote = mPublisher.Write(message);
 
-    std::cout << "[cmd_ctl] published data=" << command
-              << " (" << FsmCommandToString(static_cast<FsmCommand>(command)) << ")"
-              << " topic=" << mPublisher.GetChannelName()
-              << " ok=" << (wrote ? "true" : "false")
-              << std::endl;
+    std::cout << "[ctl] " << command << std::endl;
+    if (!wrote)
+    {
+        std::cerr << "[ctl] publish failed" << std::endl;
+    }
 }
 
 std::string CmdCtlPublisher::FsmCommandToString(FsmCommand command)

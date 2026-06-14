@@ -179,7 +179,6 @@ void MotionSwitcherBridgeClass::SetRobotPosture(RobotPosture posture)
     }
 
     mRobotPosture = posture;
-    std::cout << "[robot_posture] " << RobotPostureToString(posture) << std::endl;
 }
 
 RobotPosture MotionSwitcherBridgeClass::GetRobotPosture() const
@@ -198,8 +197,6 @@ void MotionSwitcherBridgeClass::ResetToDefaults()
     mModeName = "ai";
     mSilent = false;
     mRobotPosture = RobotPosture::StandDown;
-
-    std::cout << "[reset] motion_switcher -> ai mode, stand down posture" << std::endl;
 }
 
 const char* MotionSwitcherBridgeClass::RobotPostureToString(RobotPosture posture)
@@ -280,8 +277,6 @@ std::string MotionSwitcherBridgeClass::BuildInterceptResponseData(
         if (!CanChangeMotionMode())
         {
             statusCode = unitree::robot::b2::UT_SWITCH_ERR_BUSY;
-            std::cout << "[motion_switcher] SELECT_MODE rejected while "
-                      << RobotPostureToString(mRobotPosture) << std::endl;
             return {};
         }
 
@@ -313,8 +308,6 @@ std::string MotionSwitcherBridgeClass::BuildInterceptResponseData(
         if (!CanChangeMotionMode())
         {
             statusCode = unitree::robot::b2::UT_SWITCH_ERR_BUSY;
-            std::cout << "[motion_switcher] RELEASE_MODE rejected while "
-                      << RobotPostureToString(mRobotPosture) << std::endl;
             return {};
         }
 

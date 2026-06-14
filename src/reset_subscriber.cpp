@@ -11,7 +11,6 @@ ResetSubscriber::ResetSubscriber(const std::string& topicName)
     : mSubscriber(ToRosDdsTopicName(topicName)),
       m_channelInitialized(false)
 {
-    std::cout << "[reset] subscribe DDS topic=" << mSubscriber.GetChannelName() << std::endl;
 }
 
 ResetSubscriber::~ResetSubscriber()
