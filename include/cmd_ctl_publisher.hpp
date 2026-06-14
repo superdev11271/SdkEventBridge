@@ -2,11 +2,10 @@
 #define CMD_CTL_PUBLISHER_HPP
 
 #include <cstdint>
-#include <memory>
 #include <string>
 
-#include <rclcpp/rclcpp.hpp>
-#include <std_msgs/msg/int32.hpp>
+#include <unitree/idl/ros2/Int32_.hpp>
+#include <unitree/robot/channel/channel_publisher.hpp>
 
 namespace sdk_event_bridge
 {
@@ -27,16 +26,16 @@ public:
     CmdCtlPublisher(const CmdCtlPublisher&) = delete;
     CmdCtlPublisher& operator=(const CmdCtlPublisher&) = delete;
 
+    void InitChannel();
     void PublishCommand(FsmCommand command);
     void PublishCommand(int32_t command);
-    void SpinOnce();
 
     static std::string FsmCommandToString(FsmCommand command);
     static bool TryMapSportApiToFsmCommand(int32_t apiId, FsmCommand& command);
 
 private:
-    rclcpp::Node::SharedPtr mNode;
-    rclcpp::Publisher<std_msgs::msg::Int32>::SharedPtr mPublisher;
+    unitree::robot::ChannelPublisher<std_msgs::msg::dds_::Int32_> mPublisher;
+    bool m_channelInitialized;
 };
 
 }  // namespace sdk_event_bridge

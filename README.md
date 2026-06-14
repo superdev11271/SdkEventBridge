@@ -1,6 +1,6 @@
 # SdkEventBridge
 
-Intercept Unitree SDK2 sport and motion switcher commands over DDS, handle them in your own program, and republish sport events to ROS2 simulation topics (`/cmd_vel`, `/cmd_ctl`).
+Intercept Unitree SDK2 sport and motion switcher commands over DDS, handle them in your own program, and publish sport events to simulation topics (`/cmd_vel`, `/cmd_ctl`) via Unitree SDK2 DDS channels.
 
 When a sport client (for example `b2_sport_client` or `go2_sport_client`) sends a command, Unitree SDK2 publishes on these internal DDS topics:
 
@@ -12,7 +12,7 @@ Motion switcher clients use:
 - `rt/api/motion_switcher/request`
 - `rt/api/motion_switcher/response`
 
-SdkEventBridge listens for those commands, handles them locally, and bridges sport events to ROS2 simulation topics.
+SdkEventBridge listens for those commands, handles them locally, and bridges sport events to simulation DDS topics.
 
 ## Features
 
@@ -39,59 +39,58 @@ SdkEventBridge listens for those commands, handles them locally, and bridges spo
   - RELEASE_MODE
   - SET_SILENT
   - GET_SILENT
-- Publish ROS2 `geometry_msgs/msg/Twist` to `/cmd_vel` on MOVE and STOPMOVE
-- Publish ROS2 `std_msgs/msg/Int32` to `/cmd_ctl` for FSM / simulation commands
-- Passive mode for observation-only use
+- Publish DDS `geometry_msgs/msg/Twist` to `/cmd_vel` on MOVE and STOPMOVE (Unitree SDK2 `ChannelPublisher`)
+- Publish DDS `std_msgs/msg/Int32` to `/cmd_ctl` for FSM / simulation commands
 
 ## Requirements
 
 - C++17 compiler
 - [Unitree SDK2](https://github.com/unitreerobotics/unitree_sdk2) installed (`unitree_sdk2`, CycloneDDS)
-- ROS 2 Humble (`rclcpp`, `geometry_msgs`, `std_msgs`)
 
 ## Build
 
 ```bash
-source /opt/ros/humble/setup.bash
-
 cd SdkEventBridge
 mkdir -p build && cd build
-cmake .. -DCMAKE_PREFIX_PATH="/opt/ros/humble"
+cmake ..
 cmake --build .
 ```
 
 ## Run
 
 ```bash
-source /opt/ros/humble/setup.bash
-./sdk_event_bridge <networkInterface> [domainId] [mode]
+./build/sdk_event_bridge <networkInterface>
 ```
 
-Examples:
+**Important:** `sdk_event_bridge` must be running before you use `b2_sport_client`. The sport client alone does not publish to `/cmd_vel` or `/cmd_ctl`.
+
+ROS 2 (rmw_cyclonedds) maps `/cmd_ctl` to the DDS topic `rt/cmd_ctl`. The bridge publishes on `rt/cmd_vel` and `rt/cmd_ctl` so `ros2 topic echo` and the simulator can receive messages. On stand down you should see:
+
+```text
+[cmd_ctl] published data=10002 ... topic=rt/cmd_ctl ok=true
+```
+
+Use the same network interface (`eth0`) and DDS domain (`0`) as the simulator. If needed:
 
 ```bash
-# Intercept mode on eth0 (default)
-./sdk_event_bridge eth0
-
-# Local test without robot
-./sdk_event_bridge lo 0 intercept
-
-# Passive observe-only mode
-./sdk_event_bridge eth0 0 passive
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export ROS_DOMAIN_ID=0
 ```
+
+Note: `stop_move` (test id 2) only stops velocity; `stand_down` (test id 3) publishes `/cmd_ctl` data `10002`.
 
 ### Typical workflow
 
 Terminal 1:
 
 ```bash
-source /opt/ros/humble/setup.bash
-./sdk_event_bridge eth0
+./build/sdk_event_bridge eth0
 ```
 
-Terminal 2:
+Terminal 2 (optional, if a ROS 2 node on the same DDS domain should observe topics):
 
 ```bash
+source /opt/ros/humble/setup.bash
 ros2 topic echo /cmd_vel geometry_msgs/msg/Twist
 ros2 topic echo /cmd_ctl std_msgs/msg/Int32
 ```
@@ -108,13 +107,6 @@ Test examples:
 - `3` or `stand_down` → `/cmd_ctl` data=`10002`
 - `0` or `damp` → `/cmd_ctl` data=`10003`
 - stand up / recovery stand → `/cmd_ctl` data=`10001`
-
-## Modes
-
-| Mode | Description |
-|------|-------------|
-| `intercept` (default) | Acts as the sport and motion switcher server. Commands are handled locally and answered immediately. |
-| `passive` | Subscribes to DDS topics and logs traffic without replying as the server. |
 
 ## Motion switcher bridge
 
@@ -265,7 +257,7 @@ ros2 topic pub /cmd_ctl std_msgs/msg/Int32 "{data: 10001}"
 | `3104` | Client API timeout (robot did not respond in time) |
 | other | See Unitree SDK internal / sport error definitions |
 
-In intercept mode, most sport APIs respond with `0` immediately. `STANDUP`, `STANDDOWN`, and `RECOVERYSTAND` wait about 2 seconds before returning success.
+Commands are handled locally. Most sport APIs respond with `0` immediately. `STANDUP`, `STANDDOWN`, and `RECOVERYSTAND` wait about 2 seconds before returning success.
 
 ## Important notes
 
@@ -281,7 +273,6 @@ In intercept mode, most sport APIs respond with `0` immediately. `STANDUP`, `STA
 #include "cmd_vel_publisher.hpp"
 
 SdkEventBridgeClass bridge(0, "eth0");
-bridge.SetMode(BridgeMode::Intercept);
 bridge.Init();
 
 bridge.RegisterMoveHandler([](const SportEventResult& result) {

@@ -9,9 +9,9 @@
 #include <unordered_map>
 
 #include <unitree/robot/b2/motion_switcher/motion_switcher_api.hpp>
+#include <unitree/robot/channel/channel_publisher.hpp>
 #include <unitree/robot/channel/channel_subscriber.hpp>
 #include <unitree/robot/internal/internal_request_response.hpp>
-#include <unitree/robot/server/server_stub.hpp>
 
 #include "sdk_event_bridge.hpp"
 
@@ -58,9 +58,6 @@ public:
     MotionSwitcherBridgeClass(const MotionSwitcherBridgeClass&) = delete;
     MotionSwitcherBridgeClass& operator=(const MotionSwitcherBridgeClass&) = delete;
 
-    void SetMode(BridgeMode mode);
-    BridgeMode GetMode() const;
-
     void Init();
     void Start();
     void Stop();
@@ -92,21 +89,10 @@ public:
     static const char* RobotPostureToString(RobotPosture posture);
 
 private:
-    struct PendingRequest
-    {
-        int32_t apiId = 0;
-        std::string parameter;
-        std::chrono::steady_clock::time_point sentAt = std::chrono::steady_clock::now();
-    };
-
-    void StartPassive();
     void StartIntercept();
-    void StopPassive();
     void StopIntercept();
 
-    void OnRequest(const void* message);
-    void OnResponse(const void* message);
-    void HandleInterceptedRequest(const unitree::robot::RequestPtr& requestPtr);
+    void HandleInterceptedRequest(const unitree::robot::Request& request);
 
     void DispatchRequest(int32_t apiId, const unitree::robot::Request& request);
     void DispatchResponse(int32_t apiId, const unitree::robot::Response& response);
@@ -121,7 +107,6 @@ private:
         int32_t statusCode,
         const std::string& data);
 
-    BridgeMode mMode;
     int32_t mDomainId;
     std::string mNetworkInterface;
     bool mInitialized;
@@ -138,11 +123,9 @@ private:
     std::unordered_map<int32_t, MotionSwitcherRequestHandler> mRequestHandlers;
     std::unordered_map<int32_t, MotionSwitcherResponseHandler> mResponseHandlers;
     std::unordered_map<int32_t, MotionSwitcherEventHandler> mEventHandlers;
-    std::unordered_map<int64_t, PendingRequest> mPendingRequests;
 
     std::unique_ptr<unitree::robot::ChannelSubscriber<unitree::robot::Request>> mRequestSubscriber;
-    std::unique_ptr<unitree::robot::ChannelSubscriber<unitree::robot::Response>> mResponseSubscriber;
-    std::unique_ptr<unitree::robot::ServerStub> mServerStub;
+    std::unique_ptr<unitree::robot::ChannelPublisher<unitree::robot::Response>> mResponsePublisher;
 };
 
 }  // namespace sdk_event_bridge

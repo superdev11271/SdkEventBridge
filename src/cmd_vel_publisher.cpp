@@ -3,13 +3,15 @@
 #include <cmath>
 #include <iostream>
 
+#include "ros_dds_topic.hpp"
 #include <unitree/common/json/jsonize.hpp>
 
 namespace sdk_event_bridge
 {
 
 CmdVelPublisher::CmdVelPublisher(const std::string& topicName)
-    : mNode(std::make_shared<rclcpp::Node>("sdk_event_bridge_cmd_vel")),
+    : mPublisher(ToRosDdsTopicName(topicName)),
+      m_channelInitialized(false),
       m_continuousMoveMode(false),
       m_jointsLocked(true),
       m_walkMode(WalkMode::None),
@@ -18,10 +20,24 @@ CmdVelPublisher::CmdVelPublisher(const std::string& topicName)
       m_speedLevel(-1),
       m_maxLinearSpeed(AI_LOW_MAX_LINEAR_SPEED)
 {
-    mPublisher = mNode->create_publisher<geometry_msgs::msg::Twist>(topicName, 10);
+    std::cout << "[cmd_vel] DDS topic=" << mPublisher.GetChannelName() << std::endl;
 }
 
-CmdVelPublisher::~CmdVelPublisher() = default;
+CmdVelPublisher::~CmdVelPublisher()
+{
+    mPublisher.CloseChannel();
+}
+
+void CmdVelPublisher::InitChannel()
+{
+    if (m_channelInitialized)
+    {
+        return;
+    }
+
+    mPublisher.InitChannel();
+    m_channelInitialized = true;
+}
 
 void CmdVelPublisher::SetContinuousMoveMode(bool enabled)
 {
@@ -394,20 +410,28 @@ MoveVelocity CmdVelPublisher::ApplySpeedLimit(const MoveVelocity& velocity) cons
 
 void CmdVelPublisher::PublishMove(const MoveVelocity& velocity)
 {
-    geometry_msgs::msg::Twist twist;
-    twist.linear.x = velocity.vx;
-    twist.linear.y = velocity.vy;
-    twist.linear.z = 0.0;
-    twist.angular.x = 0.0;
-    twist.angular.y = 0.0;
-    twist.angular.z = velocity.vyaw;
+    geometry_msgs::msg::dds_::Twist_ twist;
+    twist.linear().x() = velocity.vx;
+    twist.linear().y() = velocity.vy;
+    twist.linear().z() = 0.0;
+    twist.angular().x() = 0.0;
+    twist.angular().y() = 0.0;
+    twist.angular().z() = velocity.vyaw;
 
-    mPublisher->publish(twist);
+    if (!m_channelInitialized)
+    {
+        InitChannel();
+    }
 
-    std::cout << "[cmd_vel] published linear=(" << twist.linear.x << ", "
-              << twist.linear.y << ", " << twist.linear.z << ") angular=("
-              << twist.angular.x << ", " << twist.angular.y << ", "
-              << twist.angular.z << ")" << std::endl;
+    const bool wrote = mPublisher.Write(twist);
+
+    std::cout << "[cmd_vel] published linear=(" << twist.linear().x() << ", "
+              << twist.linear().y() << ", " << twist.linear().z() << ") angular=("
+              << twist.angular().x() << ", " << twist.angular().y() << ", "
+              << twist.angular().z() << ")"
+              << " topic=" << mPublisher.GetChannelName()
+              << " ok=" << (wrote ? "true" : "false")
+              << std::endl;
 }
 
 void CmdVelPublisher::PublishStop()
@@ -456,11 +480,6 @@ void CmdVelPublisher::Tick()
     std::cout << "[move_mode] no new MOVE for 1s, auto stop" << std::endl;
     m_hasActiveMove = false;
     PublishStop();
-}
-
-void CmdVelPublisher::SpinOnce()
-{
-    rclcpp::spin_some(mNode);
 }
 
 }  // namespace sdk_event_bridge

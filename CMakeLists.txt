@@ -6,15 +6,13 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 find_package(unitree_sdk2 REQUIRED)
-find_package(rclcpp REQUIRED)
-find_package(geometry_msgs REQUIRED)
-find_package(std_msgs REQUIRED)
 
 add_library(sdk_event_bridge_lib STATIC
     src/sdk_event_bridge.cpp
     src/motion_switcher_bridge.cpp
     src/cmd_vel_publisher.cpp
     src/cmd_ctl_publisher.cpp
+    src/int32_.cpp
 )
 target_include_directories(sdk_event_bridge_lib
     PUBLIC
@@ -23,9 +21,6 @@ target_include_directories(sdk_event_bridge_lib
 target_link_libraries(sdk_event_bridge_lib
     PUBLIC
         unitree_sdk2
-        rclcpp::rclcpp
-        geometry_msgs::geometry_msgs__rosidl_typesupport_cpp
-        std_msgs::std_msgs__rosidl_typesupport_cpp
 )
 
 add_executable(sdk_event_bridge src/main.cpp)

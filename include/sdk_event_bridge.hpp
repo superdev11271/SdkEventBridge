@@ -9,7 +9,6 @@
 #include <unordered_map>
 
 #include <unitree/robot/b2/sport/sport_api.hpp>
-#include <unitree/robot/channel/channel_subscriber.hpp>
 #include <unitree/robot/go2/sport/sport_api.hpp>
 #include <unitree/robot/internal/internal_request_response.hpp>
 #include <unitree/robot/server/server_stub.hpp>
@@ -23,12 +22,6 @@ inline constexpr const char* SPORT_SERVICE_NAME = "sport";
 
 inline constexpr int32_t SPORT_STATUS_SUCCESS = 0;
 inline constexpr std::chrono::milliseconds POSTURE_ACTION_RESPONSE_DELAY{2000};
-
-enum class BridgeMode
-{
-    Passive,
-    Intercept,
-};
 
 enum class SportEventType : int32_t
 {
@@ -76,9 +69,6 @@ public:
     SdkEventBridgeClass(const SdkEventBridgeClass&) = delete;
     SdkEventBridgeClass& operator=(const SdkEventBridgeClass&) = delete;
 
-    void SetMode(BridgeMode mode);
-    BridgeMode GetMode() const;
-
     void Init();
     void Start();
     void Stop();
@@ -111,20 +101,9 @@ public:
     static std::string StatusCodeToString(int32_t statusCode);
 
 private:
-    struct PendingRequest
-    {
-        int32_t apiId = 0;
-        std::string parameter;
-        std::chrono::steady_clock::time_point sentAt = std::chrono::steady_clock::now();
-    };
-
-    void StartPassive();
     void StartIntercept();
-    void StopPassive();
     void StopIntercept();
 
-    void OnSportRequest(const void* message);
-    void OnSportResponse(const void* message);
     void HandleInterceptedRequest(const unitree::robot::RequestPtr& requestPtr);
 
     void DispatchRequest(int32_t apiId, const unitree::robot::Request& request);
@@ -142,7 +121,6 @@ private:
         int32_t statusCode,
         const std::string& data);
 
-    BridgeMode mMode;
     int32_t mDomainId;
     std::string mNetworkInterface;
     bool mInitialized;
@@ -154,10 +132,7 @@ private:
     std::unordered_map<int32_t, SportRequestHandler> mRequestHandlers;
     std::unordered_map<int32_t, SportResponseHandler> mResponseHandlers;
     std::unordered_map<int32_t, SportEventHandler> mEventHandlers;
-    std::unordered_map<int64_t, PendingRequest> mPendingRequests;
 
-    std::unique_ptr<unitree::robot::ChannelSubscriber<unitree::robot::Request>> mSportRequestSubscriber;
-    std::unique_ptr<unitree::robot::ChannelSubscriber<unitree::robot::Response>> mSportResponseSubscriber;
     std::unique_ptr<unitree::robot::ServerStub> mSportServerStub;
 };
 

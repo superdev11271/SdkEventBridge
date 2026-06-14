@@ -2,18 +2,34 @@
 
 #include <iostream>
 
+#include "ros_dds_topic.hpp"
 #include <unitree/robot/go2/sport/sport_api.hpp>
 
 namespace sdk_event_bridge
 {
 
 CmdCtlPublisher::CmdCtlPublisher(const std::string& topicName)
-    : mNode(std::make_shared<rclcpp::Node>("sdk_event_bridge_cmd_ctl"))
+    : mPublisher(ToRosDdsTopicName(topicName)),
+      m_channelInitialized(false)
 {
-    mPublisher = mNode->create_publisher<std_msgs::msg::Int32>(topicName, 10);
+    std::cout << "[cmd_ctl] DDS topic=" << mPublisher.GetChannelName() << std::endl;
 }
 
-CmdCtlPublisher::~CmdCtlPublisher() = default;
+CmdCtlPublisher::~CmdCtlPublisher()
+{
+    mPublisher.CloseChannel();
+}
+
+void CmdCtlPublisher::InitChannel()
+{
+    if (m_channelInitialized)
+    {
+        return;
+    }
+
+    mPublisher.InitChannel();
+    m_channelInitialized = true;
+}
 
 void CmdCtlPublisher::PublishCommand(FsmCommand command)
 {
@@ -22,18 +38,20 @@ void CmdCtlPublisher::PublishCommand(FsmCommand command)
 
 void CmdCtlPublisher::PublishCommand(int32_t command)
 {
-    std_msgs::msg::Int32 message;
-    message.data = command;
-    mPublisher->publish(message);
+    if (!m_channelInitialized)
+    {
+        InitChannel();
+    }
+
+    std_msgs::msg::dds_::Int32_ message;
+    message.data() = command;
+    const bool wrote = mPublisher.Write(message);
 
     std::cout << "[cmd_ctl] published data=" << command
               << " (" << FsmCommandToString(static_cast<FsmCommand>(command)) << ")"
+              << " topic=" << mPublisher.GetChannelName()
+              << " ok=" << (wrote ? "true" : "false")
               << std::endl;
-}
-
-void CmdCtlPublisher::SpinOnce()
-{
-    rclcpp::spin_some(mNode);
 }
 
 std::string CmdCtlPublisher::FsmCommandToString(FsmCommand command)

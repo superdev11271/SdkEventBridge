@@ -1,10 +1,10 @@
+#include <atomic>
 #include <cmath>
+#include <csignal>
 #include <iostream>
 #include <memory>
 #include <string>
 #include <thread>
-
-#include <rclcpp/rclcpp.hpp>
 
 #include "cmd_ctl_publisher.hpp"
 #include "cmd_vel_publisher.hpp"
@@ -12,6 +12,18 @@
 #include "sdk_event_bridge.hpp"
 
 using namespace sdk_event_bridge;
+
+namespace
+{
+
+std::atomic<bool> g_running{true};
+
+void HandleShutdownSignal(int)
+{
+    g_running.store(false);
+}
+
+}  // namespace
 
 static void PublishFsmCommandIfMapped(
     const std::shared_ptr<CmdCtlPublisher>& cmdCtlPublisher,
@@ -344,42 +356,20 @@ static void RegisterSportEventLogging(
     });
 }
 
-static BridgeMode ParseMode(const std::string& mode)
-{
-    if (mode == "passive")
-    {
-        return BridgeMode::Passive;
-    }
-
-    return BridgeMode::Intercept;
-}
-
 int main(int argc, char** argv)
 {
-    rclcpp::init(argc, argv);
-
     if (argc < 2)
     {
-        std::cout << "Usage: " << argv[0] << " <networkInterface> [domainId] [mode]" << std::endl;
-        std::cout << "  mode: intercept (default) | passive" << std::endl;
+        std::cout << "Usage: " << argv[0] << " <networkInterface>" << std::endl;
         std::cout << "Example: " << argv[0] << " eth0" << std::endl;
-        std::cout << "         " << argv[0] << " lo 0 intercept" << std::endl;
-        rclcpp::shutdown();
         return 1;
     }
 
-    const std::string networkInterface = argv[1];
-    int32_t domainId = 0;
-    BridgeMode mode = BridgeMode::Intercept;
+    std::signal(SIGINT, HandleShutdownSignal);
+    std::signal(SIGTERM, HandleShutdownSignal);
 
-    if (argc > 2)
-    {
-        domainId = std::stoi(argv[2]);
-    }
-    if (argc > 3)
-    {
-        mode = ParseMode(argv[3]);
-    }
+    const std::string networkInterface = argv[1];
+    constexpr int32_t domainId = 0;
 
     auto cmdVelPublisher = std::make_shared<CmdVelPublisher>("/cmd_vel");
     auto cmdCtlPublisher = std::make_shared<CmdCtlPublisher>("/cmd_ctl");
@@ -387,49 +377,44 @@ int main(int argc, char** argv)
     SdkEventBridgeClass sportBridge(domainId, networkInterface);
     MotionSwitcherBridgeClass motionSwitcherBridge(domainId, networkInterface);
 
-    sportBridge.SetMode(mode);
-    motionSwitcherBridge.SetMode(mode);
-
     sportBridge.Init();
+    motionSwitcherBridge.Init();
+    cmdVelPublisher->InitChannel();
+    cmdCtlPublisher->InitChannel();
     RegisterSportEventLogging(sportBridge, motionSwitcherBridge, cmdVelPublisher, cmdCtlPublisher);
     RegisterMotionSwitcherEventLogging(motionSwitcherBridge, cmdVelPublisher);
 
     sportBridge.Start();
     motionSwitcherBridge.Start();
 
-    std::cout << "SdkEventBridge mode="
-              << (mode == BridgeMode::Intercept ? "intercept" : "passive")
+    std::cout << "SdkEventBridge"
               << " sport_service=" << SPORT_SERVICE_NAME
               << " sport_request=" << SPORT_REQUEST_TOPIC
               << " sport_response=" << SPORT_RESPONSE_TOPIC
               << " motion_switcher_request=" << MOTION_SWITCHER_REQUEST_TOPIC
               << " motion_switcher_response=" << MOTION_SWITCHER_RESPONSE_TOPIC
-              << " ros2_cmd_vel=/cmd_vel"
-              << " ros2_cmd_ctl=/cmd_ctl"
-              << " domain=" << domainId
+              << " ros_cmd_vel=/cmd_vel (DDS wire: rt/cmd_vel)"
+              << " ros_cmd_ctl=/cmd_ctl (DDS wire: rt/cmd_ctl)"
               << " interface=" << networkInterface << std::endl;
 
-    if (mode == BridgeMode::Intercept)
-    {
-        std::cout << "Sport commands are handled locally and answered immediately (code 0)." << std::endl;
-        std::cout << "MOVE -> /cmd_vel (geometry_msgs/Twist)" << std::endl;
-        std::cout << "SWITCHMOVEMODE -> continuous MOVE on/off (auto stop after 1s when off)" << std::endl;
-        std::cout << "SPEEDLEVEL -> AI only: 1.5/3.5 m/s slow/fast; sport (normal): fixed 6.0 m/s" << std::endl;
-        std::cout << "STANDUP/STANDDOWN/RECOVERYSTAND -> /cmd_ctl immediately, success after 2s" << std::endl;
-        std::cout << "STANDUP/RECOVERYSTAND -> lock joints (MOVE blocked)" << std::endl;
-        std::cout << "BALANCESTAND -> unlock joints (MOVE allowed)" << std::endl;
-        std::cout << "SWITCHGAIT 0 -> lock, 1-4 -> unlock" << std::endl;
-        std::cout << "VISIONWALK/CLASSICWALK/FASTWALK true -> unlock, false -> lock" << std::endl;
-        std::cout << "FREEWALK -> unlock joints (free gait)" << std::endl;
-        std::cout << "STANDUP/BALANCESTAND/RECOVERYSTAND -> /cmd_ctl 10001" << std::endl;
-        std::cout << "STANDDOWN -> stop /cmd_vel, then /cmd_ctl 10002" << std::endl;
-        std::cout << "DAMP -> stop /cmd_vel, then /cmd_ctl 10003" << std::endl;
-        std::cout << "Motion switcher: SELECT_MODE/RELEASE_MODE only allowed in stand down posture"
-                  << " (error 7002 when stand up or walking)." << std::endl;
-        std::cout << "Keep the real robot off this DDS network to prevent it from executing commands." << std::endl;
-    }
+    std::cout << "Sport commands are handled locally and answered immediately (code 0)." << std::endl;
+    std::cout << "MOVE -> /cmd_vel (geometry_msgs/msg/Twist via Unitree DDS)" << std::endl;
+    std::cout << "SWITCHMOVEMODE -> continuous MOVE on/off (auto stop after 1s when off)" << std::endl;
+    std::cout << "SPEEDLEVEL -> AI only: 1.5/3.5 m/s slow/fast; sport (normal): fixed 6.0 m/s" << std::endl;
+    std::cout << "STANDUP/STANDDOWN/RECOVERYSTAND -> /cmd_ctl immediately, success after 2s" << std::endl;
+    std::cout << "STANDUP/RECOVERYSTAND -> lock joints (MOVE blocked)" << std::endl;
+    std::cout << "BALANCESTAND -> unlock joints (MOVE allowed)" << std::endl;
+    std::cout << "SWITCHGAIT 0 -> lock, 1-4 -> unlock" << std::endl;
+    std::cout << "VISIONWALK/CLASSICWALK/FASTWALK true -> unlock, false -> lock" << std::endl;
+    std::cout << "FREEWALK -> unlock joints (free gait)" << std::endl;
+    std::cout << "STANDUP/BALANCESTAND/RECOVERYSTAND -> /cmd_ctl 10001" << std::endl;
+    std::cout << "STANDDOWN -> stop /cmd_vel, then /cmd_ctl 10002" << std::endl;
+    std::cout << "DAMP -> stop /cmd_vel, then /cmd_ctl 10003" << std::endl;
+    std::cout << "Motion switcher: SELECT_MODE/RELEASE_MODE only allowed in stand down posture"
+              << " (error 7002 when stand up or walking)." << std::endl;
+    std::cout << "Keep the real robot off this DDS network to prevent it from executing commands." << std::endl;
 
-    while (rclcpp::ok())
+    while (g_running.load())
     {
         cmdVelPublisher->Tick();
         if (cmdVelPublisher->IsActivelyMoving())
@@ -441,13 +426,12 @@ int main(int argc, char** argv)
             motionSwitcherBridge.SetRobotPosture(RobotPosture::StandUp);
         }
 
-        cmdVelPublisher->SpinOnce();
-        cmdCtlPublisher->SpinOnce();
         std::this_thread::sleep_for(std::chrono::milliseconds(10));
     }
 
     sportBridge.Stop();
     motionSwitcherBridge.Stop();
-    rclcpp::shutdown();
+    cmdVelPublisher.reset();
+    cmdCtlPublisher.reset();
     return 0;
 }

@@ -1,5 +1,6 @@
 #include "motion_switcher_bridge.hpp"
 
+#include "channel_factory_init.hpp"
 #include <unitree/common/json/jsonize.hpp>
 #include <unitree/robot/channel/channel_factory.hpp>
 #include <iostream>
@@ -14,8 +15,7 @@ namespace sdk_event_bridge
 MotionSwitcherBridgeClass::MotionSwitcherBridgeClass(
     int32_t domainId,
     const std::string& networkInterface)
-    : mMode(BridgeMode::Intercept),
-      mDomainId(domainId),
+    : mDomainId(domainId),
       mNetworkInterface(networkInterface),
       mInitialized(false),
       mStarted(false),
@@ -31,21 +31,6 @@ MotionSwitcherBridgeClass::~MotionSwitcherBridgeClass()
     Stop();
 }
 
-void MotionSwitcherBridgeClass::SetMode(BridgeMode mode)
-{
-    if (mStarted)
-    {
-        return;
-    }
-
-    mMode = mode;
-}
-
-BridgeMode MotionSwitcherBridgeClass::GetMode() const
-{
-    return mMode;
-}
-
 void MotionSwitcherBridgeClass::Init()
 {
     if (mInitialized)
@@ -53,7 +38,7 @@ void MotionSwitcherBridgeClass::Init()
         return;
     }
 
-    unitree::robot::ChannelFactory::Instance()->Init(mDomainId, mNetworkInterface);
+    InitUnitreeChannelFactoryOnce(mDomainId, mNetworkInterface);
     mInitialized = true;
 }
 
@@ -69,54 +54,33 @@ void MotionSwitcherBridgeClass::Start()
         return;
     }
 
-    if (mMode == BridgeMode::Intercept)
-    {
-        StartIntercept();
-    }
-    else
-    {
-        StartPassive();
-    }
-
+    StartIntercept();
     mStarted = true;
 }
 
 void MotionSwitcherBridgeClass::Stop()
 {
-    StopPassive();
     StopIntercept();
-    mPendingRequests.clear();
     mStarted = false;
-}
-
-void MotionSwitcherBridgeClass::StartPassive()
-{
-    mRequestSubscriber = std::make_unique<unitree::robot::ChannelSubscriber<unitree::robot::Request>>(
-        MOTION_SWITCHER_REQUEST_TOPIC,
-        [this](const void* message) { OnRequest(message); },
-        10);
-
-    mResponseSubscriber = std::make_unique<unitree::robot::ChannelSubscriber<unitree::robot::Response>>(
-        MOTION_SWITCHER_RESPONSE_TOPIC,
-        [this](const void* message) { OnResponse(message); },
-        10);
-
-    mRequestSubscriber->InitChannel();
-    mResponseSubscriber->InitChannel();
 }
 
 void MotionSwitcherBridgeClass::StartIntercept()
 {
-    mServerStub = std::make_unique<unitree::robot::ServerStub>();
-    mServerStub->Init(
-        unitree::robot::b2::MOTION_SWITCHER_SERVICE_NAME,
-        [this](const unitree::robot::RequestPtr& requestPtr) {
-            HandleInterceptedRequest(requestPtr);
+    mResponsePublisher = std::make_unique<unitree::robot::ChannelPublisher<unitree::robot::Response>>(
+        MOTION_SWITCHER_RESPONSE_TOPIC);
+    mResponsePublisher->InitChannel();
+
+    mRequestSubscriber = std::make_unique<unitree::robot::ChannelSubscriber<unitree::robot::Request>>(
+        MOTION_SWITCHER_REQUEST_TOPIC,
+        [this](const void* message) {
+            const auto* request = static_cast<const unitree::robot::Request*>(message);
+            HandleInterceptedRequest(*request);
         },
-        false);
+        10);
+    mRequestSubscriber->InitChannel();
 }
 
-void MotionSwitcherBridgeClass::StopPassive()
+void MotionSwitcherBridgeClass::StopIntercept()
 {
     if (mRequestSubscriber)
     {
@@ -124,16 +88,11 @@ void MotionSwitcherBridgeClass::StopPassive()
         mRequestSubscriber.reset();
     }
 
-    if (mResponseSubscriber)
+    if (mResponsePublisher)
     {
-        mResponseSubscriber->CloseChannel();
-        mResponseSubscriber.reset();
+        mResponsePublisher->CloseChannel();
+        mResponsePublisher.reset();
     }
-}
-
-void MotionSwitcherBridgeClass::StopIntercept()
-{
-    mServerStub.reset();
 }
 
 void MotionSwitcherBridgeClass::SetRequestHandler(MotionSwitcherRequestHandler handler)
@@ -398,9 +357,8 @@ unitree::robot::Response MotionSwitcherBridgeClass::BuildInterceptResponse(
 }
 
 void MotionSwitcherBridgeClass::HandleInterceptedRequest(
-    const unitree::robot::RequestPtr& requestPtr)
+    const unitree::robot::Request& request)
 {
-    const unitree::robot::Request& request = *requestPtr;
     const int32_t apiId = static_cast<int32_t>(request.header().identity().api_id());
     const auto startedAt = std::chrono::steady_clock::now();
 
@@ -424,56 +382,12 @@ void MotionSwitcherBridgeClass::HandleInterceptedRequest(
         DispatchEventResult(result);
     }
 
-    if (mServerStub)
+    if (mResponsePublisher)
     {
-        mServerStub->Send(response);
+        mResponsePublisher->Write(response);
     }
 
     DispatchResponse(apiId, response);
-}
-
-void MotionSwitcherBridgeClass::OnRequest(const void* message)
-{
-    const auto* request = static_cast<const unitree::robot::Request*>(message);
-    const int32_t apiId = static_cast<int32_t>(request->header().identity().api_id());
-    const int64_t requestId = request->header().identity().id();
-
-    if (IsTrackedApi(apiId))
-    {
-        mPendingRequests[requestId] = PendingRequest{apiId, request->parameter()};
-    }
-
-    DispatchRequest(apiId, *request);
-}
-
-void MotionSwitcherBridgeClass::OnResponse(const void* message)
-{
-    const auto* response = static_cast<const unitree::robot::Response*>(message);
-    const int32_t apiId = static_cast<int32_t>(response->header().identity().api_id());
-    const int64_t requestId = response->header().identity().id();
-    const int32_t statusCode = response->header().status().code();
-
-    if (IsTrackedApi(apiId))
-    {
-        MotionSwitcherEventResult result;
-        result.apiId = apiId;
-        result.requestId = requestId;
-        result.statusCode = statusCode;
-        result.data = response->data();
-
-        const auto pending = mPendingRequests.find(requestId);
-        if (pending != mPendingRequests.end())
-        {
-            result.parameter = pending->second.parameter;
-            result.responseLatencyMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - pending->second.sentAt).count();
-            mPendingRequests.erase(pending);
-        }
-
-        DispatchEventResult(result);
-    }
-
-    DispatchResponse(apiId, *response);
 }
 
 void MotionSwitcherBridgeClass::DispatchRequest(

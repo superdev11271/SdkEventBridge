@@ -2,6 +2,7 @@
 
 #include <thread>
 
+#include "channel_factory_init.hpp"
 #include <unitree/robot/channel/channel_factory.hpp>
 #include <unitree/robot/go2/sport/sport_error.hpp>
 #include <unitree/robot/internal/internal_api.hpp>
@@ -11,8 +12,7 @@ namespace sdk_event_bridge
 {
 
 SdkEventBridgeClass::SdkEventBridgeClass(int32_t domainId, const std::string& networkInterface)
-    : mMode(BridgeMode::Intercept),
-      mDomainId(domainId),
+    : mDomainId(domainId),
       mNetworkInterface(networkInterface),
       mInitialized(false),
       mStarted(false)
@@ -24,21 +24,6 @@ SdkEventBridgeClass::~SdkEventBridgeClass()
     Stop();
 }
 
-void SdkEventBridgeClass::SetMode(BridgeMode mode)
-{
-    if (mStarted)
-    {
-        return;
-    }
-
-    mMode = mode;
-}
-
-BridgeMode SdkEventBridgeClass::GetMode() const
-{
-    return mMode;
-}
-
 void SdkEventBridgeClass::Init()
 {
     if (mInitialized)
@@ -46,7 +31,7 @@ void SdkEventBridgeClass::Init()
         return;
     }
 
-    unitree::robot::ChannelFactory::Instance()->Init(mDomainId, mNetworkInterface);
+    InitUnitreeChannelFactoryOnce(mDomainId, mNetworkInterface);
     mInitialized = true;
 }
 
@@ -62,40 +47,14 @@ void SdkEventBridgeClass::Start()
         return;
     }
 
-    if (mMode == BridgeMode::Intercept)
-    {
-        StartIntercept();
-    }
-    else
-    {
-        StartPassive();
-    }
-
+    StartIntercept();
     mStarted = true;
 }
 
 void SdkEventBridgeClass::Stop()
 {
-    StopPassive();
     StopIntercept();
-    mPendingRequests.clear();
     mStarted = false;
-}
-
-void SdkEventBridgeClass::StartPassive()
-{
-    mSportRequestSubscriber = std::make_unique<unitree::robot::ChannelSubscriber<unitree::robot::Request>>(
-        SPORT_REQUEST_TOPIC,
-        [this](const void* message) { OnSportRequest(message); },
-        10);
-
-    mSportResponseSubscriber = std::make_unique<unitree::robot::ChannelSubscriber<unitree::robot::Response>>(
-        SPORT_RESPONSE_TOPIC,
-        [this](const void* message) { OnSportResponse(message); },
-        10);
-
-    mSportRequestSubscriber->InitChannel();
-    mSportResponseSubscriber->InitChannel();
 }
 
 void SdkEventBridgeClass::StartIntercept()
@@ -107,21 +66,6 @@ void SdkEventBridgeClass::StartIntercept()
             HandleInterceptedRequest(requestPtr);
         },
         false);
-}
-
-void SdkEventBridgeClass::StopPassive()
-{
-    if (mSportRequestSubscriber)
-    {
-        mSportRequestSubscriber->CloseChannel();
-        mSportRequestSubscriber.reset();
-    }
-
-    if (mSportResponseSubscriber)
-    {
-        mSportResponseSubscriber->CloseChannel();
-        mSportResponseSubscriber.reset();
-    }
 }
 
 void SdkEventBridgeClass::StopIntercept()
@@ -372,50 +316,6 @@ void SdkEventBridgeClass::HandleInterceptedRequest(const unitree::robot::Request
     }
 
     DispatchResponse(apiId, response);
-}
-
-void SdkEventBridgeClass::OnSportRequest(const void* message)
-{
-    const auto* request = static_cast<const unitree::robot::Request*>(message);
-    const int32_t apiId = static_cast<int32_t>(request->header().identity().api_id());
-    const int64_t requestId = request->header().identity().id();
-
-    if (IsTrackedSportApi(apiId))
-    {
-        mPendingRequests[requestId] = PendingRequest{apiId, request->parameter()};
-    }
-
-    DispatchRequest(apiId, *request);
-}
-
-void SdkEventBridgeClass::OnSportResponse(const void* message)
-{
-    const auto* response = static_cast<const unitree::robot::Response*>(message);
-    const int32_t apiId = static_cast<int32_t>(response->header().identity().api_id());
-    const int64_t requestId = response->header().identity().id();
-    const int32_t statusCode = response->header().status().code();
-
-    if (IsTrackedSportApi(apiId))
-    {
-        SportEventResult result;
-        result.apiId = apiId;
-        result.requestId = requestId;
-        result.statusCode = statusCode;
-        result.data = response->data();
-
-        const auto pending = mPendingRequests.find(requestId);
-        if (pending != mPendingRequests.end())
-        {
-            result.parameter = pending->second.parameter;
-            result.responseLatencyMs = std::chrono::duration_cast<std::chrono::milliseconds>(
-                std::chrono::steady_clock::now() - pending->second.sentAt).count();
-            mPendingRequests.erase(pending);
-        }
-
-        DispatchEventResult(result);
-    }
-
-    DispatchResponse(apiId, *response);
 }
 
 void SdkEventBridgeClass::DispatchRequest(int32_t apiId, const unitree::robot::Request& request)

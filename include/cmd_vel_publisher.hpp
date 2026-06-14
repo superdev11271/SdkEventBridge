@@ -6,8 +6,8 @@
 #include <memory>
 #include <string>
 
-#include <geometry_msgs/msg/twist.hpp>
-#include <rclcpp/rclcpp.hpp>
+#include <unitree/idl/ros2/Twist_.hpp>
+#include <unitree/robot/channel/channel_publisher.hpp>
 
 namespace sdk_event_bridge
 {
@@ -52,6 +52,7 @@ public:
     CmdVelPublisher(const CmdVelPublisher&) = delete;
     CmdVelPublisher& operator=(const CmdVelPublisher&) = delete;
 
+    void InitChannel();
     void SetContinuousMoveMode(bool enabled);
     bool IsContinuousMoveModeEnabled() const;
     void SetSpeedLevel(int level);
@@ -76,7 +77,6 @@ public:
     void PublishMove(const MoveVelocity& velocity);
     void PublishMoveFromParameter(const std::string& parameterJson);
     void Tick();
-    void SpinOnce();
 
     static MoveVelocity ParseMoveParameter(const std::string& parameterJson);
     static bool ParseBoolParameter(const std::string& parameterJson, bool& value);
@@ -93,9 +93,9 @@ private:
     MoveVelocity ApplySpeedLimit(const MoveVelocity& velocity) const;
     void PublishStop();
 
-    rclcpp::Node::SharedPtr mNode;
-    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr mPublisher;
+    unitree::robot::ChannelPublisher<geometry_msgs::msg::dds_::Twist_> mPublisher;
 
+    bool m_channelInitialized;
     bool m_continuousMoveMode;
     bool m_jointsLocked;
     WalkMode m_walkMode;
